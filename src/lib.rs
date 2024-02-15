@@ -3,6 +3,10 @@
 #![feature(const_trait_impl)]
 #![feature(exact_size_is_empty)]
 
+mod log;
+mod error;
+mod storage;
+
 #[cfg(test)]
 mod test {
     #[test]
