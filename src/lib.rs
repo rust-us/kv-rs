@@ -3,9 +3,10 @@
 #![feature(const_trait_impl)]
 #![feature(exact_size_is_empty)]
 
-mod log;
-mod error;
-mod storage;
+pub mod log;
+pub mod error;
+pub mod storage;
+pub mod codec;
 
 #[cfg(test)]
 mod test {

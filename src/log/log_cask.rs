@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use crate::error::CResult;
-use crate::log::{KeyDir, Log};
-use crate::storage::{Engine, ScanIteratorT, Status};
+use crate::storage::{KeyDir, ScanIteratorT, Status};
+use crate::storage::engine::Engine;
+use crate::storage::log::Log;
 
 /// A very simple variant of LogCask, itself a very simple log-structured key-value engine.
 ///
@@ -40,8 +41,12 @@ pub struct LogCask {
 impl LogCask {
     /// Opens or creates a LogCask database in the given file.
     pub fn new(path: PathBuf) -> CResult<Self> {
-        let mut log = Log::new(path)?;
-        let keydir = log.build_keydir()?;
+        Self::new_with_lock(path, true)
+    }
+
+    pub fn new_with_lock(path: PathBuf, try_lock: bool) -> CResult<Self> {
+        let mut log = Log::new_with_lock(path, try_lock).unwrap();
+        let keydir = log.build_keydir().unwrap();
         Ok(Self { log, keydir })
     }
 
@@ -69,6 +74,10 @@ impl LogCask {
         }
 
         Ok(s)
+    }
+
+    pub fn get_path(&self) -> Option<&str> {
+        self.log.path.to_str()
     }
 }
 
@@ -103,8 +112,8 @@ impl Engine for LogCask {
         ScanIterator { inner: self.keydir.range(range), log: &mut self.log }
     }
 
-    fn scan_dyn(
-        &mut self,
+    fn scan_dyn<'a>(
+        &'a mut self,
         range: (std::ops::Bound<Vec<u8>>, std::ops::Bound<Vec<u8>>),
     ) -> Box<dyn ScanIteratorT + '_> {
         Box::new(self.scan(range))
@@ -204,16 +213,35 @@ impl Drop for LogCask {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use std::io::{Cursor, Read, Write};
+    use std::path::PathBuf;
+    use byteorder::ReadBytesExt;
+    use bytes::{BufMut, BytesMut};
+    use serde_derive::{Deserialize, Serialize};
+    use tokio::io::AsyncWriteExt;
+    use crate::codec::json_codec::JsonCodec;
+    use crate::codec::Serialize;
     use crate::error::{CResult, Error};
     use crate::log::log_cask::LogCask;
-    use crate::storage::Engine;
+    use crate::storage::engine::Engine;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Persion {
+        name: String,
+
+        age: i16,
+
+        address: String,
+    }
 
     /// Creates a new LogCask engine for testing.
     fn setup() -> CResult<LogCask> {
-        LogCask::new(tempdir::TempDir::new("demo")?.path().join("mydb"))
+        let path = tempdir::TempDir::new("demo")?.path().join("mydb");
+        println!("path:{:?}", &path);
+
+        LogCask::new_with_lock(path, false)
     }
 
     /// Writes various values primarily for testing log file handling.
@@ -263,11 +291,85 @@ mod tests {
     }
 
     #[test]
-    /// Tests that logs are written correctly using a golden file.
-    fn log() -> CResult<()> {
-        let mut s = setup()?;
-        setup_log(&mut s)?;
+    fn test_log() -> CResult<()> {
+        let mut s = setup().unwrap();
+        setup_log(&mut s).unwrap();
+
+        let stat = s.status().unwrap();
+        println!("stat:{:?}", stat);
+
+        // write 4k
+        let mut _4k = Vec::<u8>::with_capacity(1024 * 4);
+        for i in 0..1024*4 {
+            _4k.push(0);
+        }
+        s.set("4k".as_bytes(), _4k)?;
+        s.flush().unwrap();
+
+        let stat = s.status().unwrap();
+        println!("stat:{:?}", stat);
+
+        // test_load_from_log_file
+        let mut cask = LogCask::new_with_lock(PathBuf::from(s.get_path().unwrap()), false).unwrap();
+        let get = cask.get(b"b");
+        assert!(get.is_ok());
+        let get_val = get.unwrap().unwrap();
+        assert_eq!(get_val, vec![0x02]);
+
+        let get_4k = cask.get("4k".as_bytes());
+        assert!(get_4k.is_ok());
+        let get_4k_val = get_4k.unwrap().unwrap();
+        assert_eq!(get_4k_val.len(), 1024*4);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_log_with_persion() {
+        let mut log_cask = setup().unwrap();
+
+        let codec = JsonCodec::new();
+
+        let persion_key = "persion_cache_key";
+
+        let mut buf = BytesMut::with_capacity(1024);
+        for i in 0..1 {
+            let p = Persion {
+                name: format!("name{}", i),
+                age: i % 85,
+                address: format!("address{}", i),
+            };
+
+            let b = codec.serde(&p).unwrap();
+            buf.put(b.as_bytes());
+        }
+
+        let persion_list_len = buf.len();
+        log_cask.set(persion_key.as_bytes(), buf.to_vec()).unwrap();
+        log_cask.flush().unwrap();
+
+        let stat = log_cask.status().unwrap();
+        println!("stat:{:?}", stat);
+
+        // test_load_from_log_file
+        let save_path = log_cask.get_path().unwrap();
+
+        let mut two_cask = LogCask::new_with_lock(PathBuf::from(save_path), false).unwrap();
+        let persion_list = two_cask.get(persion_key.as_bytes());
+        assert!(persion_list.is_ok());
+        let persion_list_val = persion_list.unwrap().unwrap();
+        assert_eq!(persion_list_val.len(), persion_list_len);
+
+        let mut cursor = Cursor::new(persion_list_val.as_slice());
+        loop {
+            let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
+            let mut by = vec![0; len];
+            cursor.read_exact(&mut by).unwrap();
+
+            let val = String::from_utf8(by).unwrap();
+            let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
+            let a = rs.unwrap();
+            println!("{:?}", a);
+        }
     }
 }
