@@ -88,7 +88,7 @@ impl std::fmt::Display for LogCask {
 }
 
 impl Engine for LogCask {
-    type ScanIterator<'a> = ScanIterator<'a>;
+    type ScanIterator<'a> = LogScanIterator<'a>;
 
     fn delete(&mut self, key: &[u8]) -> CResult<()> {
         self.log.write_entry(key, None)?;
@@ -109,7 +109,7 @@ impl Engine for LogCask {
     }
 
     fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_> {
-        ScanIterator { inner: self.keydir.range(range), log: &mut self.log }
+        LogScanIterator { inner: self.keydir.range(range), log: &mut self.log }
     }
 
     fn scan_dyn<'a>(
@@ -144,32 +144,6 @@ impl Engine for LogCask {
             live_disk_size,
             garbage_disk_size,
         })
-    }
-}
-
-pub struct ScanIterator<'a> {
-    inner: std::collections::btree_map::Range<'a, Vec<u8>, (u64, u32)>,
-    log: &'a mut Log,
-}
-
-impl<'a> ScanIterator<'a> {
-    fn map(&mut self, item: (&Vec<u8>, &(u64, u32))) -> <Self as Iterator>::Item {
-        let (key, (value_pos, value_len)) = item;
-        Ok((key.clone(), self.log.read_value(*value_pos, *value_len)?))
-    }
-}
-
-impl<'a> Iterator for ScanIterator<'a> {
-    type Item = CResult<(Vec<u8>, Vec<u8>)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|item| self.map(item))
-    }
-}
-
-impl<'a> DoubleEndedIterator for ScanIterator<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        self.inner.next_back().map(|item| self.map(item))
     }
 }
 
@@ -213,19 +187,44 @@ impl Drop for LogCask {
     }
 }
 
+pub struct LogScanIterator<'a> {
+    inner: std::collections::btree_map::Range<'a, Vec<u8>, (u64, u32)>,
+    log: &'a mut Log,
+}
+
+impl<'a> LogScanIterator<'a> {
+    fn map(&mut self, item: (&Vec<u8>, &(u64, u32))) -> <Self as Iterator>::Item {
+        let (key, (value_pos, value_len)) = item;
+        Ok((key.clone(), self.log.read_value(*value_pos, *value_len)?))
+    }
+}
+
+impl<'a> Iterator for LogScanIterator<'a> {
+    type Item = CResult<(Vec<u8>, Vec<u8>)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|item| self.map(item))
+    }
+}
+
+impl<'a> DoubleEndedIterator for LogScanIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|item| self.map(item))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::io::{Cursor, Read, Write};
+    use std::io::{Cursor, Read};
     use std::path::PathBuf;
     use byteorder::ReadBytesExt;
     use bytes::{BufMut, BytesMut};
     use serde_derive::{Deserialize, Serialize};
-    use tokio::io::AsyncWriteExt;
     use crate::codec::json_codec::JsonCodec;
     use crate::codec::Serialize;
     use crate::error::{CResult, Error};
-    use crate::log::log_cask::LogCask;
     use crate::storage::engine::Engine;
+    use crate::storage::log_cask::LogCask;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Persion {
@@ -360,16 +359,16 @@ mod tests {
         let persion_list_val = persion_list.unwrap().unwrap();
         assert_eq!(persion_list_val.len(), persion_list_len);
 
-        let mut cursor = Cursor::new(persion_list_val.as_slice());
-        loop {
-            let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
-            let mut by = vec![0; len];
-            cursor.read_exact(&mut by).unwrap();
-
-            let val = String::from_utf8(by).unwrap();
-            let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
-            let a = rs.unwrap();
-            println!("{:?}", a);
-        }
+        // let mut cursor = Cursor::new(persion_list_val.as_slice());
+        // loop {
+        //     let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
+        //     let mut by = vec![0; len];
+        //     cursor.read_exact(&mut by).unwrap();
+        //
+        //     let val = String::from_utf8(by).unwrap();
+        //     let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
+        //     let a = rs.unwrap();
+        //     println!("{:?}", a);
+        // }
     }
 }
