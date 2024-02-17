@@ -3,6 +3,7 @@ use crate::error::CResult;
 
 pub mod json_codec;
 pub mod bytes_codec;
+pub mod keycodec;
 
 pub trait Serialize<V> {
     /// 序列化

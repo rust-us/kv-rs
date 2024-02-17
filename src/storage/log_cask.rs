@@ -119,7 +119,6 @@ impl Engine for LogCask {
         Box::new(self.scan(range))
     }
 
-
     fn set(&mut self, key: &[u8], value: Vec<u8>) -> CResult<()> {
         let (pos, len) = self.log.write_entry(key, Some(&*value))?;
         let value_len = value.len() as u32;
