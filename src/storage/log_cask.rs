@@ -215,9 +215,7 @@ impl<'a> DoubleEndedIterator for LogScanIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Cursor, Read};
     use std::path::PathBuf;
-    use byteorder::ReadBytesExt;
     use bytes::{BufMut, BytesMut};
     use serde_derive::{Deserialize, Serialize};
     use crate::codec::json_codec::JsonCodec;
@@ -225,6 +223,11 @@ mod tests {
     use crate::error::{CResult, Error};
     use crate::storage::engine::Engine;
     use crate::storage::log_cask::LogCask;
+
+    super::super::tests::test_engine!({
+        let path = tempdir::TempDir::new("demo")?.path().join("whosdb");
+        LogCask::new(path)?
+    });
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Persion {

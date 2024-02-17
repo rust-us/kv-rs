@@ -24,12 +24,12 @@ impl std::fmt::Display for Memory {
 impl Engine for Memory {
     type ScanIterator<'a> = MemoryScanIterator<'a>;
 
-    fn flush(&mut self) -> CResult<()> {
+    fn delete(&mut self, key: &[u8]) -> CResult<()> {
+        self.data.remove(key);
         Ok(())
     }
 
-    fn delete(&mut self, key: &[u8]) -> CResult<()> {
-        self.data.remove(key);
+    fn flush(&mut self) -> CResult<()> {
         Ok(())
     }
 
