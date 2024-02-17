@@ -45,8 +45,8 @@ impl LogCask {
     }
 
     pub fn new_with_lock(path: PathBuf, try_lock: bool) -> CResult<Self> {
-        let mut log = Log::new_with_lock(path, try_lock).unwrap();
-        let keydir = log.build_keydir().unwrap();
+        let mut log = Log::new_with_lock(path, try_lock)?;
+        let keydir = log.build_keydir()?;
         Ok(Self { log, keydir })
     }
 
@@ -222,7 +222,9 @@ mod tests {
     use crate::codec::Serialize;
     use crate::error::{CResult, Error};
     use crate::storage::engine::Engine;
+    use crate::storage::log::Log;
     use crate::storage::log_cask::LogCask;
+    use crate::storage::Status;
 
     super::super::tests::test_engine!({
         let path = tempdir::TempDir::new("demo")?.path().join("whosdb");
@@ -288,6 +290,171 @@ mod tests {
         );
 
         let rs = s.flush();
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests that writing and then reading a file yields the same results.
+    fn reopen() -> CResult<()> {
+        // NB: Don't use setup(), because the tempdir will be removed when
+        // the path falls out of scope.
+        let path = tempdir::TempDir::new("demo")?.path().join("adb");
+        let mut s = LogCask::new(path.clone())?;
+        setup_log(&mut s)?;
+
+        let expect = s.scan(..).collect::<CResult<Vec<_>>>()?;
+        drop(s);
+        let mut s = LogCask::new(path)?;
+        assert_eq!(expect, s.scan(..).collect::<CResult<Vec<_>>>()?,);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests that new_compact() will automatically compact the file when appropriate.
+    fn new_compact() -> CResult<()> {
+        // Create an initial log file with a few entries.
+        let dir = tempdir::TempDir::new("demo")?;
+        let path = dir.path().join("orig");
+        let compactpath = dir.path().join("compact");
+
+        let mut s = LogCask::new_compact(path.clone(), 0.2)?;
+        setup_log(&mut s)?;
+        let status = s.status()?;
+        let garbage_ratio = status.garbage_disk_size as f64 / status.total_disk_size as f64;
+        drop(s);
+
+        // Test a few threshold value and assert whether it should trigger compaction.
+        let cases = vec![
+            (-1.0, true),
+            (0.0, true),
+            (garbage_ratio - 0.001, true),
+            (garbage_ratio, true),
+            (garbage_ratio + 0.001, false),
+            (1.0, false),
+            (2.0, false),
+        ];
+        for (threshold, expect_compact) in cases.into_iter() {
+            std::fs::copy(&path, &compactpath)?;
+            let mut s = LogCask::new_compact(compactpath.clone(), threshold)?;
+            let new_status = s.status()?;
+            assert_eq!(new_status.live_disk_size, status.live_disk_size);
+            if expect_compact {
+                assert_eq!(new_status.total_disk_size, status.live_disk_size);
+                assert_eq!(new_status.garbage_disk_size, 0);
+            } else {
+                assert_eq!(new_status, status);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests that exclusive locks are taken out on log files, released when the
+    /// cask is closed, and that an error is returned if a lock is already
+    /// held.
+    fn log_lock() -> CResult<()> {
+        let path = tempdir::TempDir::new("demo")?.path().join("t_app");
+        let s = LogCask::new(path.clone())?;
+
+        assert!(LogCask::new(path.clone()).is_err());
+        drop(s);
+        assert!(LogCask::new(path.clone()).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests that an incomplete write at the end of the log file can be
+    /// recovered by discarding the last entry.
+    fn recovery() -> CResult<()> {
+        // Create an initial log file with a few entries.
+        let dir = tempdir::TempDir::new("demmo")?;
+        let path = dir.path().join("complete");
+        let truncpath = dir.path().join("truncated");
+
+        let mut log = Log::new(path.clone())?;
+        let mut ends = vec![];
+
+        let (pos, len) = log.write_entry("deleted".as_bytes(), Some(&[1, 2, 3]))?;
+        ends.push(pos + len as u64);
+
+        let (pos, len) = log.write_entry("deleted".as_bytes(), None)?;
+        ends.push(pos + len as u64);
+
+        let (pos, len) = log.write_entry(&[], Some(&[]))?;
+        ends.push(pos + len as u64);
+
+        let (pos, len) = log.write_entry("key".as_bytes(), Some(&[1, 2, 3, 4, 5]))?;
+        ends.push(pos + len as u64);
+
+        drop(log);
+
+        // Copy the file, and truncate it at each byte, then try to open it
+        // and assert that we always retain a prefix of entries.
+        let size = std::fs::metadata(&path)?.len();
+        for pos in 0..=size {
+            std::fs::copy(&path, &truncpath)?;
+            let f = std::fs::OpenOptions::new().write(true).open(&truncpath)?;
+            f.set_len(pos)?;
+            drop(f);
+
+            let mut expect = vec![];
+            if pos >= ends[0] {
+                expect.push((b"deleted".to_vec(), vec![1, 2, 3]))
+            }
+            if pos >= ends[1] {
+                expect.pop(); // "deleted" key removed
+            }
+            if pos >= ends[2] {
+                expect.push((b"".to_vec(), vec![]))
+            }
+            if pos >= ends[3] {
+                expect.push((b"key".to_vec(), vec![1, 2, 3, 4, 5]))
+            }
+
+            let mut s = LogCask::new(truncpath.clone())?;
+            assert_eq!(expect, s.scan(..).collect::<CResult<Vec<_>>>()?);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests status(), both for a log file with known garbage, and
+    /// after compacting it when the live size must equal the file size.
+    fn status_full() -> CResult<()> {
+        let mut s = setup()?;
+        setup_log(&mut s)?;
+
+        // Before compaction.
+        assert_eq!(
+            s.status()?,
+            Status {
+                name: "cask".to_string(),
+                keys: 5,
+                size: 8,
+                total_disk_size: 114,
+                live_disk_size: 48,
+                garbage_disk_size: 66
+            }
+        );
+
+        // After compaction.
+        s.compact()?;
+        assert_eq!(
+            s.status()?,
+            Status {
+                name: "cask".to_string(),
+                keys: 5,
+                size: 8,
+                total_disk_size: 48,
+                live_disk_size: 48,
+                garbage_disk_size: 0,
+            }
+        );
 
         Ok(())
     }
