@@ -220,7 +220,7 @@ mod tests {
     use bytes::{BufMut, BytesMut};
     use serde_derive::{Deserialize, Serialize};
     use crate::codec::json_codec::JsonCodec;
-    use crate::codec::{keycodec, Serialize};
+    use crate::codec::{Codec,};
     use crate::error::{CResult, Error};
     use crate::storage::engine::Engine;
     use crate::storage::log::Log;
@@ -234,21 +234,16 @@ mod tests {
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Persion {
+        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         name: String,
 
+        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         age: i16,
 
+        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         address: String,
-    }
 
-    impl Persion {
-        fn decode(bytes: &[u8]) -> CResult<Self> {
-            keycodec::deserialize(bytes)
-        }
-
-        fn encode(&self) -> CResult<Vec<u8>> {
-            keycodec::serialize(self)
-        }
+        codec: Option<Box<dyn Codec>>,
     }
 
     /// Creates a new LogCask engine for testing.
@@ -504,50 +499,55 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn test_log_with_persion() {
-    //     let mut log_cask = setup().unwrap();
-    //
-    //     let persion_key = "persion_cache_key";
-    //
-    //     let mut buf = BytesMut::with_capacity(1024);
-    //     for i in 0..1 {
-    //         let p = Persion {
-    //             name: format!("name{}", i),
-    //             age: i % 85,
-    //             address: format!("address{}", i),
-    //         };
-    //
-    //         let b = p.encode().unwrap();
-    //         buf.put_u64(buf.len() as u64);
-    //         buf.put(b.as_slice());
-    //     }
-    //
-    //     log_cask.set(persion_key.as_bytes(), buf.to_vec()).unwrap();
-    //     log_cask.flush().unwrap();
-    //
-    //     let stat = log_cask.status().unwrap();
-    //     println!("stat:{:?}", stat);
-    //
-    //     // test_load_from_log_file
-    //     let save_path = log_cask.get_path().unwrap();
-    //
-    //     let mut two_cask = LogCask::new_with_lock(PathBuf::from(save_path), false).unwrap();
-    //     let persion_list = two_cask.get(persion_key.as_bytes());
-    //     assert!(persion_list.is_ok());
-    //     let persion_list_val = persion_list.unwrap().unwrap();
+    #[test]
+    fn test_log_with_persion() {
+        let codec = JsonCodec::new();
 
-        // let mut cursor = Cursor::new(persion_list_val.as_slice());
-        // loop {
-        //     let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
-        //     let mut by = vec![0; len];
+        let mut log_cask = setup().unwrap();
+
+        let persion_key = "persion_cache_key";
+
+        let mut buf = BytesMut::with_capacity(1024);
+        for i in 0..1 {
+            let p = Persion {
+                name: format!("name{}", i),
+                age: i % 85,
+                address: format!("address{}", i),
+                codec: Some(Box::new(codec)),
+            };
+
+            let b = codec.encode(&p).unwrap();
+            buf.put_u64(b.len() as u64);
+            buf.put(b.as_slice());
+        }
+
+        log_cask.set(persion_key.as_bytes(), buf.to_vec()).unwrap();
+        log_cask.flush().unwrap();
+
+        let stat = log_cask.status().unwrap();
+        println!("stat:{:?}", stat);
+
+        // test_load_from_log_file
+        let save_path = log_cask.get_path().unwrap();
+
+        let mut two_cask = LogCask::new_with_lock(PathBuf::from(save_path), false).unwrap();
+        let persion_list = two_cask.get(persion_key.as_bytes());
+        assert!(persion_list.is_ok());
+        let persion_list_val = persion_list.unwrap().unwrap();
+
+        let mut cursor = Cursor::new(persion_list_val.as_slice());
+        loop {
+            let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
+            let mut by = vec![0; len];
         //     cursor.read_exact(&mut by).unwrap();
         //
+
+            // let b = codec.decode(&p).unwrap();
         //     let rs = Persion::decode(by.as_slice()).unwrap();
         // //     let val = String::from_utf8(by).unwrap();
         // //     let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
         // //     let a = rs.unwrap();
         //     println!("{:?}", rs);
-        // }
-    // }
+        }
+    }
 }

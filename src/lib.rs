@@ -6,6 +6,7 @@
 pub mod error;
 pub mod storage;
 pub mod codec;
+pub mod mvcc;
 
 #[cfg(test)]
 mod test {
