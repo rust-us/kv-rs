@@ -6,7 +6,7 @@ pub struct JsonCodec {
 }
 
 impl Serialize<String> for JsonCodec {
-    fn serde<T>(&self, value: &T) -> CResult<String>
+    fn encode<T>(&self, value: &T) -> CResult<String>
         where T: ?Sized + serde::Serialize {
         let serialized = serde_json::to_string(&value);
 

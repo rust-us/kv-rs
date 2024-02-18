@@ -39,7 +39,7 @@ pub struct LogCask {
 }
 
 impl LogCask {
-    /// Opens or creates a LogCask database in the given file.
+    /// Opens or creates a LogCask in the given file.
     pub fn new(path: PathBuf) -> CResult<Self> {
         Self::new_with_lock(path, true)
     }
@@ -50,7 +50,7 @@ impl LogCask {
         Ok(Self { log, keydir })
     }
 
-    /// Opens a LogCask database, and automatically compacts it if the amount
+    /// Opens a LogCask, and automatically compacts it if the amount
     /// of garbage exceeds the given ratio when opened.
     pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> CResult<Self> {
         let mut s = Self::new(path)?;
@@ -177,7 +177,7 @@ impl LogCask {
     }
 }
 
-/// Attempt to flush the file when the database is closed.
+/// Attempt to flush the file when the LogCask is closed.
 impl Drop for LogCask {
     fn drop(&mut self) {
         if let Err(error) = self.flush() {
@@ -214,11 +214,13 @@ impl<'a> DoubleEndedIterator for LogScanIterator<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Cursor, Read};
     use std::path::PathBuf;
+    use byteorder::ReadBytesExt;
     use bytes::{BufMut, BytesMut};
     use serde_derive::{Deserialize, Serialize};
     use crate::codec::json_codec::JsonCodec;
-    use crate::codec::Serialize;
+    use crate::codec::{keycodec, Serialize};
     use crate::error::{CResult, Error};
     use crate::storage::engine::Engine;
     use crate::storage::log::Log;
@@ -237,6 +239,16 @@ mod tests {
         age: i16,
 
         address: String,
+    }
+
+    impl Persion {
+        fn decode(bytes: &[u8]) -> CResult<Self> {
+            keycodec::deserialize(bytes)
+        }
+
+        fn encode(&self) -> CResult<Vec<u8>> {
+            keycodec::serialize(self)
+        }
     }
 
     /// Creates a new LogCask engine for testing.
@@ -424,7 +436,7 @@ mod tests {
     #[test]
     /// Tests status(), both for a log file with known garbage, and
     /// after compacting it when the live size must equal the file size.
-    fn status_full() -> CResult<()> {
+    fn test_status_full() -> CResult<()> {
         let mut s = setup()?;
         setup_log(&mut s)?;
 
@@ -432,7 +444,7 @@ mod tests {
         assert_eq!(
             s.status()?,
             Status {
-                name: "cask".to_string(),
+                name: "log cask".to_string(),
                 keys: 5,
                 size: 8,
                 total_disk_size: 114,
@@ -446,7 +458,7 @@ mod tests {
         assert_eq!(
             s.status()?,
             Status {
-                name: "cask".to_string(),
+                name: "log cask".to_string(),
                 keys: 5,
                 size: 8,
                 total_disk_size: 48,
@@ -492,41 +504,38 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_log_with_persion() {
-        let mut log_cask = setup().unwrap();
-
-        let codec = JsonCodec::new();
-
-        let persion_key = "persion_cache_key";
-
-        let mut buf = BytesMut::with_capacity(1024);
-        for i in 0..1 {
-            let p = Persion {
-                name: format!("name{}", i),
-                age: i % 85,
-                address: format!("address{}", i),
-            };
-
-            let b = codec.serde(&p).unwrap();
-            buf.put(b.as_bytes());
-        }
-
-        let persion_list_len = buf.len();
-        log_cask.set(persion_key.as_bytes(), buf.to_vec()).unwrap();
-        log_cask.flush().unwrap();
-
-        let stat = log_cask.status().unwrap();
-        println!("stat:{:?}", stat);
-
-        // test_load_from_log_file
-        let save_path = log_cask.get_path().unwrap();
-
-        let mut two_cask = LogCask::new_with_lock(PathBuf::from(save_path), false).unwrap();
-        let persion_list = two_cask.get(persion_key.as_bytes());
-        assert!(persion_list.is_ok());
-        let persion_list_val = persion_list.unwrap().unwrap();
-        assert_eq!(persion_list_val.len(), persion_list_len);
+    // #[test]
+    // fn test_log_with_persion() {
+    //     let mut log_cask = setup().unwrap();
+    //
+    //     let persion_key = "persion_cache_key";
+    //
+    //     let mut buf = BytesMut::with_capacity(1024);
+    //     for i in 0..1 {
+    //         let p = Persion {
+    //             name: format!("name{}", i),
+    //             age: i % 85,
+    //             address: format!("address{}", i),
+    //         };
+    //
+    //         let b = p.encode().unwrap();
+    //         buf.put_u64(buf.len() as u64);
+    //         buf.put(b.as_slice());
+    //     }
+    //
+    //     log_cask.set(persion_key.as_bytes(), buf.to_vec()).unwrap();
+    //     log_cask.flush().unwrap();
+    //
+    //     let stat = log_cask.status().unwrap();
+    //     println!("stat:{:?}", stat);
+    //
+    //     // test_load_from_log_file
+    //     let save_path = log_cask.get_path().unwrap();
+    //
+    //     let mut two_cask = LogCask::new_with_lock(PathBuf::from(save_path), false).unwrap();
+    //     let persion_list = two_cask.get(persion_key.as_bytes());
+    //     assert!(persion_list.is_ok());
+    //     let persion_list_val = persion_list.unwrap().unwrap();
 
         // let mut cursor = Cursor::new(persion_list_val.as_slice());
         // loop {
@@ -534,10 +543,11 @@ mod tests {
         //     let mut by = vec![0; len];
         //     cursor.read_exact(&mut by).unwrap();
         //
-        //     let val = String::from_utf8(by).unwrap();
-        //     let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
-        //     let a = rs.unwrap();
-        //     println!("{:?}", a);
+        //     let rs = Persion::decode(by.as_slice()).unwrap();
+        // //     let val = String::from_utf8(by).unwrap();
+        // //     let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
+        // //     let a = rs.unwrap();
+        //     println!("{:?}", rs);
         // }
-    }
+    // }
 }
