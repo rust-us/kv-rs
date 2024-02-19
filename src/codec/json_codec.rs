@@ -40,10 +40,8 @@ impl Codec for JsonCodec {
         let mut bytes = vec![0; len];
         cursor.read_exact(&mut bytes).unwrap();
 
-        let r = String::from_utf8(bytes).ok()
-            .ok_or(Err(Error::Parse("read from_utf8 error".to_string())))
-            .unwrap();
-        let rs = serde_json::<R>::from_str(r.as_str());
+        let r = String::from_utf8(bytes).unwrap();
+        let rs = serde_json::from_slice(&r.as_bytes());
         match rs {
             Ok(r) => {
                 Ok(r)

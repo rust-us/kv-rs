@@ -234,16 +234,11 @@ mod tests {
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Persion {
-        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         name: String,
 
-        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         age: i16,
 
-        #[serde(serialize_with = "to_bytes", deserialize_with = "from_bytes")]
         address: String,
-
-        codec: Option<Box<dyn Codec>>,
     }
 
     /// Creates a new LogCask engine for testing.
@@ -513,7 +508,6 @@ mod tests {
                 name: format!("name{}", i),
                 age: i % 85,
                 address: format!("address{}", i),
-                codec: Some(Box::new(codec)),
             };
 
             let b = codec.encode(&p).unwrap();
