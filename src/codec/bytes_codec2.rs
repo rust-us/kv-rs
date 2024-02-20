@@ -1,39 +1,36 @@
 use std::io::{Cursor, Read};
 use byteorder::ReadBytesExt;
+use bytes::{BufMut, BytesMut};
 use serde::Deserialize;
-use tokio_util::bytes::{BufMut, BytesMut};
+use crate::codec::bytes_codec::BytesCodec;
 use crate::codec::Codec;
 use crate::error::{CResult, Error};
 
 #[derive(Clone, Copy)]
-pub struct BytesCodec {
+pub struct BytesCodec2 {
 
 }
 
-impl BytesCodec {
+impl BytesCodec2 {
     pub fn new() -> Self {
-        BytesCodec {
-
-        }
+        BytesCodec2 {}
     }
 
     pub fn encode<T>(&self, value: &T) -> CResult<Vec<u8>>
         where T: ?Sized + serde::Serialize {
 
-        let encoded= serde_json::to_string(&value);
+        let encoded= bincode::serialize(value);
         match encoded {
-            Ok(serde) => {
-                let bytes = serde.as_bytes();
-
+            Ok(bytes) => {
                 let mut buf = BytesMut::with_capacity(8 + bytes.len());
                 // len  8 byute
                 buf.put_u64(bytes.len() as u64);
-                buf.put(bytes);
+                buf.put(bytes.as_slice());
 
                 Ok(buf.to_vec())
             }
-            Err(e) => {
-                Err(Error::Internal(e.to_string()))
+            Err(err) => {
+                Err(Error::Parse(err.to_string()))
             }
         }
     }
@@ -52,9 +49,9 @@ impl BytesCodec {
             bytes = value.to_vec();
         }
 
-        let str = String::from_utf8(bytes).unwrap();
-        let r: serde_json::Result<R> = serde_json::from_str(&str);
-        match r {
+        let decoded = bincode::deserialize(&bytes[..]);
+
+        match decoded {
             Ok(r) => {
                 Ok(r)
             }
@@ -84,9 +81,9 @@ impl BytesCodec {
     }
 }
 
-impl Codec for BytesCodec {
+impl Codec for BytesCodec2 {
     fn codec_name<T>(&self) -> String {
-        "BytesCodec".to_string()
+        "BytesCodec2".to_string()
     }
 }
 
@@ -96,7 +93,7 @@ mod test {
     use byteorder::ReadBytesExt;
     use bytes::{BufMut, BytesMut};
     use serde_derive::{Deserialize, Serialize};
-    use crate::codec::bytes_codec::BytesCodec;
+    use crate::codec::bytes_codec2::BytesCodec2;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     struct Persion {
@@ -109,7 +106,7 @@ mod test {
 
     #[test]
     fn test_decode_bytes() {
-        let codec = BytesCodec::new();
+        let codec = BytesCodec2::new();
         let rng = rand::thread_rng();
 
         // encode
@@ -156,7 +153,7 @@ mod test {
 
     #[test]
     fn test_decode_cursor() {
-        let codec = BytesCodec::new();
+        let codec = BytesCodec2::new();
         let rng = rand::thread_rng();
 
         // encode
