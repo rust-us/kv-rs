@@ -221,6 +221,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use crate::codec::json_codec::JsonCodec;
     use crate::codec::{Codec,};
+    use crate::codec::bytes_codec::BytesCodec;
     use crate::error::{CResult, Error};
     use crate::storage::engine::Engine;
     use crate::storage::log::Log;
@@ -495,8 +496,8 @@ mod tests {
     }
 
     #[test]
-    fn test_log_with_json_persion() {
-        let codec = JsonCodec::new();
+    fn test_log_with_bytes_persion() {
+        let codec = BytesCodec::new();
 
         let mut log_cask = setup().unwrap();
 
@@ -541,7 +542,7 @@ mod tests {
             let mut by = vec![0; len];
             cursor.read_exact(&mut by).unwrap();
 
-            let r: Persion = codec.decode(&by, false).unwrap();
+            let r: Persion = codec.decode_bytes(&by, false).unwrap();
             println!("{:?}", r);
 
             let cache_p = list_for_cache.get(i_for_test).unwrap();
