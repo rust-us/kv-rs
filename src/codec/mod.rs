@@ -11,6 +11,6 @@ pub trait Codec {
         where T: ?Sized + serde::Serialize;
 
     /// 反序列化
-    fn decode<'a, R>(&self, value: &'a [u8]) -> CResult<R>
-        where R: de::Deserialize<'a>;
+    fn decode<R>(&self, value: &[u8], contains_len: bool) -> CResult<R>
+        where R: for<'a> de::Deserialize<'a>;
 }

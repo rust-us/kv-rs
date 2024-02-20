@@ -232,7 +232,7 @@ mod tests {
         LogCask::new(path)?
     });
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct Persion {
         name: String,
 
@@ -495,13 +495,14 @@ mod tests {
     }
 
     #[test]
-    fn test_log_with_persion() {
+    fn test_log_with_json_persion() {
         let codec = JsonCodec::new();
 
         let mut log_cask = setup().unwrap();
 
         let persion_key = "persion_cache_key";
 
+        let mut list_for_cache = Vec::<Persion>::new();
         let mut buf = BytesMut::with_capacity(1024);
         for i in 0..1 {
             let p = Persion {
@@ -509,9 +510,9 @@ mod tests {
                 age: i % 85,
                 address: format!("address{}", i),
             };
+            list_for_cache.push(p.clone());
 
             let b = codec.encode(&p).unwrap();
-            buf.put_u64(b.len() as u64);
             buf.put(b.as_slice());
         }
 
@@ -529,19 +530,28 @@ mod tests {
         assert!(persion_list.is_ok());
         let persion_list_val = persion_list.unwrap().unwrap();
 
+        let mut i_for_test = 0;
         let mut cursor = Cursor::new(persion_list_val.as_slice());
         loop {
-            let len = cursor.read_u64::<byteorder::LittleEndian>().unwrap() as usize;
-            let mut by = vec![0; len];
-        //     cursor.read_exact(&mut by).unwrap();
-        //
+            if cursor.is_empty() {
+                break;
+            }
 
-            // let b = codec.decode(&p).unwrap();
-        //     let rs = Persion::decode(by.as_slice()).unwrap();
-        // //     let val = String::from_utf8(by).unwrap();
-        // //     let rs: Result<Persion, serde_json::Error> = serde_json::from_str(val.as_str());
-        // //     let a = rs.unwrap();
-        //     println!("{:?}", rs);
+            let len = cursor.read_u64::<byteorder::BigEndian>().unwrap() as usize;
+            let mut by = vec![0; len];
+            cursor.read_exact(&mut by).unwrap();
+
+            let r: Persion = codec.decode(&by, false).unwrap();
+            println!("{:?}", r);
+
+            let cache_p = list_for_cache.get(i_for_test).unwrap();
+            assert_eq!(&r.name, &cache_p.name);
+            assert_eq!(&r.address, &cache_p.address);
+            assert_eq!(&r.age, &cache_p.age);
+
+            i_for_test += 1;
         }
+
+        assert_eq!(1, 1);
     }
 }
