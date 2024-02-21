@@ -1,9 +1,20 @@
 [package]
 name = "kv-rs"
 description = "A distributed kv storage"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["fengyang <yueny09@163.com>"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://gitee.com/yueny/kv-rs"
+#homepage = ""
+documentation = "https://docs.rs/kv-rs"
+keywords = ["kv"]
+#categories = ["algorithms", "no-std"]
+# 该publish字段可用于防止包被错误地发布到包注册表（如crates.io），例如将包在公司中保持私有。
+publish = true
+autobenches = true
+include = ["src/", "LICENSE-*", "README.md", "README.en.md", "CHANGELOG.md", "COPYRIGHT"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -40,3 +51,15 @@ pretty_assertions = "~1.4.0"
 serial_test = "~2.0.0"
 tempdir = "~0.3.7"
 tempfile = "~3.9.0"
+
+[profile.dev]
+lto = true
+opt-level = 0
+debug = 2
+overflow-checks = false
+codegen-units = 1
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
