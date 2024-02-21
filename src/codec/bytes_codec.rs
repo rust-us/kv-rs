@@ -110,7 +110,6 @@ mod test {
     #[test]
     fn test_decode_bytes() {
         let codec = BytesCodec::new();
-        let rng = rand::thread_rng();
 
         // encode
         let mut persion_list = Vec::<Persion>::new();

@@ -1,7 +1,7 @@
 [package]
 name = "kv-rs"
 description = "A distributed kv storage"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["fengyang <yueny09@163.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -17,6 +17,10 @@ autobenches = true
 include = ["src/", "LICENSE-*", "README.md", "README.en.md", "CHANGELOG.md", "COPYRIGHT"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bench]]
+name = "bench_main"
+harness = false
 
 [dependencies]
 clap = { version = "~4.4.2", features = ["cargo"] }
@@ -51,6 +55,9 @@ pretty_assertions = "~1.4.0"
 serial_test = "~2.0.0"
 tempdir = "~0.3.7"
 tempfile = "~3.9.0"
+# for bench
+criterion = "0.5.1"
+gnuplot = "0.0.42"
 
 [profile.dev]
 lto = true
