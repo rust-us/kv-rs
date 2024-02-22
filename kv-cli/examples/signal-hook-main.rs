@@ -9,17 +9,27 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{env, panic, thread};
 use std::time::Duration;
+use structopt::StructOpt;
 use anyhow::{Context, Result};
-use clap::Parser;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use human_panic::setup_panic;
-use kvcli::{Cli, PBAR};
-use kvcli::command::run_pack;
-use kvcli::config::ConfigLoad;
 
+/// Search for a pattern in a file and display the lines that contain it.
+#[derive(StructOpt, Debug)]
+struct Cli {
+    #[structopt(short = "p", long = "port")]
+    port: Option<i32>,
+}
 
-/// CMD like:
-///     kv-cli --quiet ==>  Cli { quiet: true }
+impl Display for Cli {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({})", self.port.as_ref().unwrap())
+    }
+}
+
+/// signal-hook 可以去处理更多的 Unix 信号。 在 https://vorner.github.io/2018/06/28/signal-hook.html 中描述了它的设计原理， 且它是目前社区里支持最为广泛的库。
+///
+/// cargo run -- --port 3006
 ///
 fn main() {
     setup_panic_hooks();
@@ -35,17 +45,42 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let cfg: ConfigLoad = confy::load_path("config")?;
-    println!("cfg {:?}", cfg);
+    let args = Cli::from_args();
 
-    let args = Cli::parse();
     println!("Hello, world! {:?}", args);
 
-    if args.quiet {
-        PBAR.set_quiet(true);
+    let pb = indicatif::ProgressBar::new(100);
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    // signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&running))?;
+    let mut signals = Signals::new(&[SIGINT])?;
+    thread::spawn(move || {
+        for sig in signals.forever() {
+            println!("Received signal {:?}", sig);
+            r.store(false, Ordering::SeqCst);
+        }
+    });
+
+    println!("Waiting for Ctrl-C...");
+    let mut idx = 0;
+    while running.load(Ordering::SeqCst) {
+        if idx >= 50 {
+            break;
+        }
+
+        thread::sleep(Duration::from_secs(1));
+
+        pb.inc(2);
+        idx += 1;
     }
 
-    run_pack(args.cmd)?;
+    pb.finish_with_message("done");
+    if running.load(Ordering::SeqCst) {
+        println!("idx is 100, Exiting...");
+    } else {
+        println!("Got it! Exiting...");
+    }
 
     Ok(())
 }

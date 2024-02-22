@@ -1,3 +1,18 @@
+[workspace.package]
+version = "0.0.2"
+description = "A distributed kv storage"
+authors = ["fengyang <yueny09@163.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://gitee.com/yueny/kv-rs"
+#homepage = ""
+documentation = "https://docs.rs/kv-rs"
+# 该publish字段可用于防止包被错误地发布到包注册表（如crates.io），例如将包在公司中保持私有。
+publish = true
+autobenches = true
+include = ["src/", "LICENSE-*", "README.md", "README.en.md", "CHANGELOG.md", "COPYRIGHT"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -8,7 +23,21 @@ members = [
 ]
 
 [workspace.dependencies]
-clap = { version = "~4.4.2", features = ["cargo"] }
+# CLI 命令行解析
+structopt = "0.3.13"
+clap = { version = "~4.4.2", features = ["cargo", "derive", "env"] }
+# 显示进度条
+indicatif = "0.17.8"
+#终端多彩显示
+colored = "2.0.0"
+#错误处理
+anyhow = "1.0.63"
+#json格式化
+jsonxf = "1.1.1"
+#处理mime类型
+mime = "0.3.16"
+#http请求
+reqwest = {version = "0.11.11",features = ["json"]}
 log = "~0.4.14"
 bincode = "~1.3.3"
 serde =  { version = "~1.0.126", features = ["derive"] }
@@ -32,6 +61,8 @@ tokio-serde = { version = "~0.8", features = ["bincode"] }
 tokio-stream = { version = "~0.1.6", features = ["net"] }
 tokio-util = { version = "~0.7.8", features = ["codec"] }
 whosly = "0.1.6"
+# config 配置加载
+confy = {version = "0.6.0"}
 
 # dev
 hex = "~0.4.3"
@@ -43,6 +74,9 @@ tempfile = "~3.9.0"
 # for bench
 criterion = "0.5.1"
 gnuplot = "0.0.42"
+assert_cmd = "1.0.8"
+predicates = "2.1.5"
+assert_fs = "1.1.1"
 
 [profile.dev]
 lto = true

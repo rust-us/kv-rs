@@ -1,11 +1,43 @@
 [package]
-name = "kv-cli"
-version = "0.1.0"
-edition = "2021"
+name = "kvcli"
+keywords = ["kv", "cli"]
+categories = ["command-line-utilities"]
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "kvcli"
+path = "src/main.rs"
+doctest = false
+test = false
+
 [dependencies]
+structopt = { workspace = true }
 clap = { workspace = true }
+indicatif = { workspace = true }
+colored = { workspace = true }
+anyhow = { workspace = true }
+jsonxf = { workspace = true }
+mime = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
+log = { workspace = true }
+confy = { workspace = true }
+ctrlc = "3.4.2"
+console = "0.15.5"
+signal-hook = {version = "0.3.17"}
+human-panic = "1.2.3"
 
 kv = { path = "../kv" }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+assert_fs = { workspace = true }
