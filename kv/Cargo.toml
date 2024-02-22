@@ -1,0 +1,51 @@
+[package]
+name = "kv"
+description = "A distributed kv storage"
+version = "0.0.2"
+authors = ["fengyang <yueny09@163.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://gitee.com/yueny/kv-rs"
+#homepage = ""
+documentation = "https://docs.rs/kv-rs"
+keywords = ["kv"]
+#categories = ["algorithms", "no-std"]
+# 该publish字段可用于防止包被错误地发布到包注册表（如crates.io），例如将包在公司中保持私有。
+publish = true
+autobenches = true
+include = ["src/", "LICENSE-*", "README.md", "README.en.md", "CHANGELOG.md", "COPYRIGHT"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bench]]
+name = "bench_main"
+harness = false
+
+[dependencies]
+log = { workspace = true }
+bincode = { workspace = true }
+serde =  { workspace = true }
+serde_json = { workspace = true }
+serde_bytes = { workspace = true }
+serde_derive = { workspace = true }
+bytes = { workspace = true }
+byteorder = { workspace = true }
+rand = { workspace = true }
+fs4 = { workspace = true }
+tokio = { workspace = true }
+tokio-serde = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+whosly = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+paste = { workspace = true }
+pretty_assertions = { workspace = true }
+serial_test = { workspace = true }
+tempdir = { workspace = true }
+tempfile = { workspace = true }
+# for bench
+criterion = { workspace = true }
+gnuplot = { workspace = true }
