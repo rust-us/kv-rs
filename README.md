@@ -51,7 +51,7 @@ The various kinds of commands that `command` can execute
 Usage: kvcli [OPTIONS] [COMMAND]
 
 Commands:
-  login  👤  Add an npm registry user account! (aliases: adduser, add-user)
+  login  👤  login sys and check user account!
   help   Print this message or the help of the given subcommand(s)
 
 Options:
