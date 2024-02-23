@@ -27,16 +27,33 @@ use kvcli::config::ConfigLoad;
 pub async fn main() -> Result<()> {
     setup_panic_hooks();
 
+    eprintln!();
+    eprintln!("██  ██  █        █");
+    eprintln!("██ ██   ██      ██");
+    eprintln!("███      ██    ██");
+    eprintln!("██ ██    ██  ██");
+    eprintln!("██  ██     ████");
+    eprintln!();
+
     let mut cfg: ConfigLoad = confy::load_path("config")?;
-    println!("cfg {:?}", &cfg);
+    println!("Config {:?}", &cfg);
 
     let args = Args::parse();
-    println!("Hello, world! {:?}", args);
+    println!("Args{:?}", args);
+    eprintln!();
+
     let mut cmd = Args::command();
     if args.help {
         cmd.print_help()?;
         return Ok(());
     }
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        println!("received Ctrl+C!");
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
 
     if args.quiet.is_some() {
         PBAR.set_quiet(true);
@@ -47,7 +64,7 @@ pub async fn main() -> Result<()> {
         cfg.terminal_update();
     }
 
-    let mut session = session::Session::try_new(cfg, true).await?;
+    let mut session = session::Session::try_new(cfg, true, running.clone()).await?;
 
     let log_dir = format!(
         "{}/.kvcli",
@@ -70,7 +87,7 @@ pub async fn main() -> Result<()> {
     }
 
     info!("Prepare Running run_pack");
-    run_pack(args.cmd.unwrap_or(Command::default()))?;
+    run_pack(args.cmd.unwrap())?;
 
     Ok(())
 }

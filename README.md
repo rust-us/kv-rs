@@ -1,37 +1,64 @@
-# kvs
+# kv
+KV Storage in Rust
 
-#### 介绍
-kv 文件存储
+## Components
+[kv](./kv): KV Storage
 
-#### 软件架构
-软件架构说明
-
-
-#### 安装教程
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 使用说明
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+[kv-cli](./kv-cli): KV CLI
 
 
-#### 特技
+## Installation for
+### Cargo
+> cargo install kvcli
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+## Usage
+
+### kvcli
+```doc
+❯ kvcli
+
+
+██  ██  █        █
+██ ██   ██      ██
+███      ██    ██
+██ ██    ██  ██
+██  ██     ████
+
+Config ConfigLoad { version: 0, api_key: "", show_progress: "false", show_stats: "false", multi_line: "false", replace_newline: "false" }
+ArgsArgs { help: false, cmd: None, quiet: None, log_level: "info", non_interactive: false, query: None }
+
+Welcome to kvcli.
+Connecting to Client.
+
+kvcli > 
+```
+
+### kvcli help
+```doc
+❯ kvcli --help
+
+██  ██  █        █
+██ ██   ██      ██
+███      ██    ██
+██ ██    ██  ██
+██  ██     ████
+
+Config ConfigLoad { version: 0, api_key: "", show_progress: "false", show_stats: "false", multi_line: "false", replace_newline: "false" }
+ArgsArgs { help: true, cmd: None, quiet: None, log_level: "info", non_interactive: false, query: None }
+
+The various kinds of commands that `command` can execute
+
+Usage: kvcli [OPTIONS] [COMMAND]
+
+Commands:
+  login  👤  Add an npm registry user account! (aliases: adduser, add-user)
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --help                   Print help information
+  -q, --quiet <QUIET>          No output printed to stdout [possible values: true, false]
+  -l, --log-level <LOG_LEVEL>  [default: info]
+  -n, --non-interactive        Force non-interactive mode
+      --query=<QUERY>          Query to execute
+  -V, --version                Print version
+```

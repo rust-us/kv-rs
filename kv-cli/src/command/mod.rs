@@ -8,18 +8,11 @@ use crate::command::login::login;
 /// The various kinds of commands that `command` can execute.
 #[derive(Debug, PartialEq, Subcommand)]
 pub enum Command {
-
-    None,
-
     #[clap(name = "login", alias = "adduser", alias = "add-user")]
-    /// 👤  Add an npm registry user account! (aliases: adduser, add-user)
+    /// 👤  login sys and check user account!
     Login {
         #[clap(long = "registry", short = 'r')]
-        /// Default: 'https://registry.npmjs.org/'.
-        /// The base URL of the npm package registry. If scope is also
-        /// specified, this registry will only be used for packages with that
-        /// scope. scope defaults to the scope of the project directory you're
-        /// currently in, if any.
+        /// The base URL of the kv server package registry.
         registry: Option<String>,
 
         #[clap(long = "scope", short = 's')]
@@ -36,12 +29,6 @@ pub enum Command {
         /// strategies besides classic username/password entry in legacy npm.
         auth_type: Option<String>,
     },
-}
-
-impl Default for Command {
-    fn default() -> Self {
-        Command::None
-    }
 }
 
 /// Run a command with the given logger!

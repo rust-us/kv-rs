@@ -1,5 +1,6 @@
 use std::io::BufRead;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::config::ConfigLoad;
 use anyhow::{anyhow, Result};
 use rustyline::{CompletionType, Editor};
@@ -19,12 +20,15 @@ pub struct Session {
     in_comment_block: bool,
 
     keywords: Arc<Vec<String>>,
+
+    running: Arc<AtomicBool>,
 }
 
 impl Session {
-    pub async fn try_new(settings: ConfigLoad, is_repl: bool) -> Result<Self> {
+    pub async fn try_new(settings: ConfigLoad, is_repl: bool, running: Arc<AtomicBool>) -> Result<Self> {
         if is_repl {
             println!("Welcome to kvcli.");
+            println!("Connecting to Client.");
             println!();
         }
 
@@ -36,6 +40,7 @@ impl Session {
             query: String::new(),
             in_comment_block: false,
             keywords: Arc::new(keywords),
+            running,
         })
     }
 
@@ -64,6 +69,10 @@ impl Session {
         rl.load_history(&get_history_path()).ok();
 
         'F: loop {
+            if !self.running.load(Ordering::SeqCst) {
+                break 'F;
+            }
+
             match rl.readline(&self.prompt().await) {
                 Ok(line) => {
                     let queries = self.append_query(&line);
@@ -89,8 +98,10 @@ impl Session {
                         eprintln!("io err: {err}");
                     }
                     ReadlineError::Interrupted => {
-                        self.query.clear();
                         println!("^C");
+
+                        self.query.clear();
+                        self.running.store(false, Ordering::SeqCst);
                     }
                     ReadlineError::Eof => {
                         break;
@@ -170,6 +181,7 @@ impl Session {
         queries
     }
 
+    /// executor cmd
     async fn handle_query(
         &mut self,
         is_repl: bool,
@@ -195,6 +207,7 @@ impl Session {
             return Ok(Some(ServerStats::default()));
         }
 
+        // parser executor cmd
         println!("cmd: {}", query);
 
         let stats = ServerStats::default();

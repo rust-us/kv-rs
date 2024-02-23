@@ -1,6 +1,7 @@
+use std::fmt::{Debug, Display, Formatter};
 use serde_derive::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConfigLoad {
     version: u8,
 
@@ -36,6 +37,49 @@ impl Default for ConfigLoad {
             multi_line: Some(true),
             replace_newline: Some(true),
         }
+    }
+}
+
+impl Debug for ConfigLoad {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut builder = f.debug_struct("ConfigLoad");
+
+        builder.field("version", &self.version);
+        builder.field("api_key", &self.api_key);
+
+        if self.prompt.is_some() {
+            builder.field("prompt", &self.prompt.as_ref().unwrap());
+        }
+
+        if self.progress_color.is_some() {
+            builder.field("progress_color", &self.progress_color.as_ref().unwrap());
+        }
+
+        if self.show_progress.is_some() {
+            builder.field("show_progress", &self.show_progress.as_ref().unwrap());
+        } else {
+            builder.field("show_progress", &"false");
+        }
+
+        if self.show_stats.is_some() {
+            builder.field("show_stats", &self.show_stats.as_ref().unwrap());
+        } else {
+            builder.field("show_stats", &"false");
+        }
+
+        if self.multi_line.is_some() {
+            builder.field("multi_line", &self.multi_line.as_ref().unwrap());
+        } else {
+            builder.field("multi_line", &"false");
+        }
+
+        if self.replace_newline.is_some() {
+            builder.field("replace_newline", &self.replace_newline.as_ref().unwrap());
+        } else {
+            builder.field("replace_newline", &"false");
+        }
+
+        builder.finish()
     }
 }
 
