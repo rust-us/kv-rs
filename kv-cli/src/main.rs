@@ -2,7 +2,7 @@
 
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{self, BufWriter, StderrLock, StdoutLock, Write};
+use std::io::{self, BufWriter, IsTerminal, StderrLock, stdin, StdoutLock, Write};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,42 +10,67 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{env, panic, thread};
 use std::time::Duration;
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use human_panic::setup_panic;
-use kvcli::{Cli, PBAR};
-use kvcli::command::run_pack;
+use log::info;
+use kvcli::{Args, PBAR, session, trace};
+use kvcli::command::{Command, run_pack};
 use kvcli::config::ConfigLoad;
 
 
 /// CMD like:
+///     kv-cli         ==>  Cli { quiet: false }
 ///     kv-cli --quiet ==>  Cli { quiet: true }
 ///
-fn main() {
+#[tokio::main]
+pub async fn main() -> Result<()> {
     setup_panic_hooks();
 
-    if let Err(e) = run() {
-        eprintln!("Error: {}", e);
+    let mut cfg: ConfigLoad = confy::load_path("config")?;
+    println!("cfg {:?}", &cfg);
 
-        for cause in e.chain() {
-            eprintln!("Caused by: {}", cause);
-        }
-        ::std::process::exit(1);
-    }
-}
-
-fn run() -> Result<()> {
-    let cfg: ConfigLoad = confy::load_path("config")?;
-    println!("cfg {:?}", cfg);
-
-    let args = Cli::parse();
+    let args = Args::parse();
     println!("Hello, world! {:?}", args);
+    let mut cmd = Args::command();
+    if args.help {
+        cmd.print_help()?;
+        return Ok(());
+    }
 
-    if args.quiet {
+    if args.quiet.is_some() {
         PBAR.set_quiet(true);
     }
+    let is_terminal = stdin().is_terminal();
+    let is_repl = is_terminal && !args.non_interactive && args.query.is_none();
+    if is_repl {
+        cfg.terminal_update();
+    }
 
-    run_pack(args.cmd)?;
+    let mut session = session::Session::try_new(cfg, true).await?;
+
+    let log_dir = format!(
+        "{}/.kvcli",
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    );
+    let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
+
+    if is_repl {
+        session.handle_repl().await;
+        return Ok(());
+    }
+
+    match args.query {
+        None => {
+            session.handle_reader(stdin().lock()).await?;
+        },
+        Some(query) => {
+            session.handle_reader(std::io::Cursor::new(query)).await?;
+        }
+    }
+
+    info!("Prepare Running run_pack");
+    run_pack(args.cmd.unwrap_or(Command::default()))?;
 
     Ok(())
 }

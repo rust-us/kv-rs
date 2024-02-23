@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use log::info;
-use crate::{npm, PBAR};
+use crate::{new, PBAR};
 
 pub fn login(
     registry: Option<String>,
@@ -16,6 +16,9 @@ pub fn login(
     // );
     info!("npm info located in the npm debug log");
     // npm::npm_login(&registry, &scope, &auth_type)?;
+
+
+    // Interactively ask user for npm login info.  (new::run does not support interactive input)
     info!("Logged you in!");
 
     PBAR.info(&"👋  logged you in!".to_string());

@@ -5,9 +5,11 @@ use anyhow::Result;
 use log::info;
 use crate::command::login::login;
 
-/// The various kinds of commands that `wasm-pack` can execute.
-#[derive(Debug, Subcommand)]
+/// The various kinds of commands that `command` can execute.
+#[derive(Debug, PartialEq, Subcommand)]
 pub enum Command {
+
+    None,
 
     #[clap(name = "login", alias = "adduser", alias = "add-user")]
     /// 👤  Add an npm registry user account! (aliases: adduser, add-user)
@@ -36,10 +38,15 @@ pub enum Command {
     },
 }
 
+impl Default for Command {
+    fn default() -> Self {
+        Command::None
+    }
+}
+
 /// Run a command with the given logger!
 pub fn run_pack(command: Command) -> Result<()> {
-    // Run the correct command based off input and store the result of it so that we can clear
-    // the progress bar then return it
+    // Run the correct command based off input and store the result of it so that we can clear the progress bar then return it
     match command {
         Command::Login {
             registry,
@@ -53,6 +60,9 @@ pub fn run_pack(command: Command) -> Result<()> {
             );
 
             login(registry, &scope, &auth_type)
+        }
+        _ => {
+            Ok(())
         }
     }
 }

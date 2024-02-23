@@ -28,12 +28,18 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
+tokio = { workspace = true }
 log = { workspace = true }
+logos = { workspace = true }
+tracing-appender = { workspace = true }
+fern= { workspace = true }
+chrono= { workspace = true }
 confy = { workspace = true }
 ctrlc = "3.4.2"
 console = "0.15.5"
 signal-hook = {version = "0.3.17"}
 human-panic = "1.2.3"
+rustyline = "12.0"
 
 kv = { path = "../kv" }
 
