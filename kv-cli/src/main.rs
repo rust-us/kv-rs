@@ -14,10 +14,50 @@ use clap::{CommandFactory, Parser};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use human_panic::setup_panic;
 use log::info;
-use kvcli::{Args, PBAR, session, trace};
+use kvcli::{command, PBAR, session, trace};
 use kvcli::command::{Command, run_pack};
-use kvcli::config::ConfigLoad;
+use kvcli::config::{ConfigLoad};
 
+#[derive(Debug, Parser, PartialEq)]
+#[command(version)]
+// disable default help flag since it would conflict with --host
+#[command(author, about, disable_help_flag = true)]
+pub struct Args {
+    #[clap(short, long, help = "debug model", default_value = "false")]
+    debug: bool,
+
+    #[clap(long, help = "Print help information")]
+    help: bool,
+
+    #[clap(long = "storage_path")]
+    /// load config path, default '${pwd}/config'
+    config_path: Option<PathBuf>,
+
+    /// The subcommand to run.
+    #[clap(subcommand)] // Note that we mark a field as a subcommand
+    cmd: Option<command::Command>,
+
+    #[clap(long = "quiet", short = 'q')]
+    /// No output printed to stdout
+    quiet: Option<bool>,
+
+    #[clap(short = 'l', default_value = "info", long)]
+    log_level: String,
+
+    #[clap(short = 'n', long, help = "Force non-interactive mode")]
+    non_interactive: bool,
+
+    #[clap(long, require_equals = true, help = "Query to execute")]
+    query: Option<String>,
+}
+
+impl Args {
+    pub fn fix_settings(&mut self) {
+        if self.config_path.is_none() {
+            self.config_path = Some("config".parse().unwrap());
+        }
+    }
+}
 
 /// CMD like:
 ///     kv-cli         ==>  Cli { quiet: false }
@@ -31,16 +71,30 @@ pub async fn main() -> Result<()> {
     eprintln!("██  ██  █        █");
     eprintln!("██ ██   ██      ██");
     eprintln!("███      ██    ██");
-    eprintln!("██ ██    ██  ██");
-    eprintln!("██  ██     ████");
+    eprintln!("██ ██     ██  ██");
+    eprintln!("██  ██     ████  KV Storage CLI");
     eprintln!();
 
-    let mut cfg: ConfigLoad = confy::load_path("config")?;
-    println!("Config {:?}", &cfg);
+    let mut args = Args::parse();
+    if args.debug {
+        println!("{:?}", args);
+    }
+    args.fix_settings();
+    info!("kvcli start args: {:?}", &args);
 
-    let args = Args::parse();
-    println!("Args{:?}", args);
-    eprintln!();
+    let log_dir = format!(
+        "{}/.kvcli",
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    );
+    let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
+
+    let mut cfg: ConfigLoad = confy::load_path(args.config_path.as_ref().unwrap())?;
+    cfg.fix_settings();
+    if args.debug {
+        println!("{:?}", &cfg);
+        eprintln!();
+    }
+    info!("kvcli start config: {:?}", &cfg);
 
     let mut cmd = Args::command();
     if args.help {
@@ -66,11 +120,7 @@ pub async fn main() -> Result<()> {
 
     let mut session = session::Session::try_new(cfg, true, running.clone()).await?;
 
-    let log_dir = format!(
-        "{}/.kvcli",
-        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
-    );
-    let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
+    info!("kvcli starting, Prepare Running packet with is_repl[{}].", is_repl);
 
     if is_repl {
         session.handle_repl().await;
@@ -86,7 +136,6 @@ pub async fn main() -> Result<()> {
         }
     }
 
-    info!("Prepare Running run_pack");
     run_pack(args.cmd.unwrap())?;
 
     Ok(())

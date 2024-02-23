@@ -1,2 +1,3 @@
 version = 1
 api_key = "abcd123456"
+storage_path = "/media/fengyang/App-1T/workspace/kv/storage"

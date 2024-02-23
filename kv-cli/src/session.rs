@@ -9,6 +9,8 @@ use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use tokio::time::Instant;
 use kv::row::rows::ServerStats;
+use kv::storage::engine::Engine;
+use kv::storage::log_cask::LogCask;
 use crate::rusty::CliHelper;
 
 const DEFAULT_PROMPT: &str = "kvcli";
@@ -16,6 +18,9 @@ const DEFAULT_PROMPT: &str = "kvcli";
 pub struct Session {
     is_repl: bool,
     settings: ConfigLoad,
+
+    engine: Box<dyn Engine>,
+
     query: String,
     in_comment_block: bool,
 
@@ -32,11 +37,14 @@ impl Session {
             println!();
         }
 
+        let engine = LogCask::new(settings.storage_path.clone().unwrap())?;
+
         let mut keywords = Vec::with_capacity(1024);
 
         Ok(Self {
             is_repl,
             settings,
+            engine: Box::new(engine),
             query: String::new(),
             in_comment_block: false,
             keywords: Arc::new(keywords),

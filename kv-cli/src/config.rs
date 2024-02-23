@@ -1,11 +1,15 @@
 use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
 use serde_derive::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ConfigLoad {
     version: u8,
 
     api_key: String,
+
+    /// load config path, default '${pwd}/config'
+    pub storage_path: Option<PathBuf>,
 
     pub prompt: Option<String>,
     pub progress_color: Option<String>,
@@ -30,6 +34,7 @@ impl Default for ConfigLoad {
         ConfigLoad {
             version: 0,
             api_key: "".to_string(),
+            storage_path: None,
             prompt: Some("kvcli".to_string()),
             progress_color: None,
             show_progress: Some(false),
@@ -46,6 +51,12 @@ impl Debug for ConfigLoad {
 
         builder.field("version", &self.version);
         builder.field("api_key", &self.api_key);
+
+        if self.storage_path.is_some() {
+            builder.field("storage_path", &self.storage_path.as_ref().unwrap());
+        } else {
+            builder.field("storage_path", &"config");
+        }
 
         if self.prompt.is_some() {
             builder.field("prompt", &self.prompt.as_ref().unwrap());
@@ -87,5 +98,16 @@ impl ConfigLoad {
     pub fn terminal_update(&mut self) {
         self.show_progress = Some(true);
         self.show_stats = Some(true);
+    }
+
+    pub fn fix_settings(&mut self) {
+        if self.storage_path.is_none() {
+            let file_path = PathBuf::from("storage/kvdb");
+
+            self.storage_path = Some(file_path);
+        } else {
+            let config_path = self.storage_path.as_ref().unwrap().join("kvdb");
+            self.storage_path = Some(config_path);
+        }
     }
 }
