@@ -10,6 +10,7 @@ use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use tokio::time::Instant;
+use kv::error::Error;
 use kv::row::rows::ServerStats;
 use kv::storage::engine::Engine;
 use kv::storage::log_cask::LogCask;
@@ -387,7 +388,7 @@ impl Session {
             (_, _) => {
                 println!("__ {}", &query);
 
-                Err(anyhow!("UnSupport command: [{}]", &query))
+                Err(anyhow!("UnImplement command: [{}]", &query))
             }
         }
     }
@@ -407,6 +408,7 @@ pub enum QueryKind {
     KSize,
     Exit,
     Select,
+    Keys,
     Set,
     Get,
     Del,
@@ -415,16 +417,28 @@ pub enum QueryKind {
     SetEx,
 }
 
-impl From<TokenKind> for QueryKind {
-    fn from(kind: TokenKind) -> Self {
+impl TryFrom<TokenKind> for QueryKind {
+    type Error = kv::error::Error;
+
+    #[inline(always)]
+    fn try_from(kind: TokenKind) -> std::result::Result<Self, Self::Error> {
         match kind {
-            TokenKind::TIME => QueryKind::Time,
-            TokenKind::GET => QueryKind::Get,
-            TokenKind::SET => QueryKind::Set,
+            TokenKind::TIME => Ok(QueryKind::Time),
+            TokenKind::GET => Ok(QueryKind::Get),
+            TokenKind::SET => Ok(QueryKind::Set),
             TokenKind::DEL |
-            TokenKind::DELETE => QueryKind::Del,
-            TokenKind::SELECT => QueryKind::Select,
-            _ => QueryKind::Select,
+            TokenKind::DELETE => Ok(QueryKind::Del),
+            TokenKind::INFO => Ok(QueryKind::Info),
+            TokenKind::KSize => Ok(QueryKind::KSize),
+            TokenKind::SELECT => Ok(QueryKind::Select),
+            TokenKind::KEYS => Ok(QueryKind::Keys),
+            TokenKind::GETSET => Ok(QueryKind::GetSet),
+            TokenKind::MGET => Ok(QueryKind::MGet),
+            TokenKind::SETEX => Ok(QueryKind::SetEx),
+            _ => {
+                let err = format!("NotFound QueryKind: [{:?}]", &kind);
+                Err(Error::Parse(err))
+            }
         }
     }
 }

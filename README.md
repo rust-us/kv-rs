@@ -82,11 +82,19 @@ kvcli >
 
 | 语法     | CMD                | Desc                                        | DEMO                           |
 |--------|--------------------|---------------------------------------------|--------------------------------|
+| INFO   | INFO               | 查看服务状态和相关信息                                 |                                |
 | TIME   | TIME               | 返回当前服务器时间                                   |                                |
+| KSIZE  | KSIZE              | 返回当前库文件的 key 的数量                            |                                |
+| EXIT   | exit               | 关闭当前连接                                      |                                |
+| SELECT | SELECT <db>        | 切换到指定的库文件                                   |                                |
 | SET    | SET <KEY> <VALUE>  | 设置指定 key 的值。                                | SET ob "redis" <br/> SET key 1 |
 | GET    | GET <KEY>          | 获取指定 key 的值                                 | GET ob                         |
+| KEYS   | KEYS               | key list                                    |                                |
 | DEL    | DEL <KEY>          |                                             | DEL ob                         |
 | DELETE | DELETE <KEY>       |                                             | DELETE ob                      |
+| GETSET | GETSET key value   | 将给定 key 的值设为 value ，并返回 key 的旧值(old value)。 |                                |
+| MGET   | MGET key1 [key2..] | 获取所有(一个或多个)给定 key 的值。                       |                                |
+| SETEX  | SETNX key value    | 只有在 key 不存在时设置 key 的值。                      |                                |
 
 
 ```doc

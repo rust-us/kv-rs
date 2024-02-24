@@ -204,6 +204,10 @@ pub enum TokenKind {
     FROM,
     #[token("GET", ignore(ascii_case))]
     GET,
+    #[token("GETSET", ignore(ascii_case))]
+    GETSET,
+    #[token("MGET", ignore(ascii_case))]
+    MGET,
     #[token("LIST", ignore(ascii_case))]
     LIST,
     #[token("MAP", ignore(ascii_case))]
@@ -222,8 +226,12 @@ pub enum TokenKind {
     RLIKE,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
+    #[token("KEYS", ignore(ascii_case))]
+    KEYS,
     #[token("SET", ignore(ascii_case))]
     SET,
+    #[token("SETEX", ignore(ascii_case))]
+    SETEX,
     #[token("UNSET", ignore(ascii_case))]
     UNSET,
     #[token("SHOW", ignore(ascii_case))]
@@ -236,6 +244,10 @@ pub enum TokenKind {
     STRING,
     #[token("TIME", ignore(ascii_case))]
     TIME,
+    #[token("INFO", ignore(ascii_case))]
+    INFO,
+    #[token("KSize", ignore(ascii_case))]
+    KSize,
     #[token("TIMESTAMP", ignore(ascii_case))]
     TIMESTAMP,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
