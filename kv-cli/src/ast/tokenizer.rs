@@ -7,8 +7,8 @@ type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
-    pub source: &'a str,
-    pub slice: &'a str,
+    source: &'a str,
+    slice: &'a str,
     pub kind: TokenKind,
     pub span: Range<usize>,
 }
@@ -21,6 +21,10 @@ impl<'a> Token<'a> {
             kind: TokenKind::EOI,
             span: (source.len()..source.len()),
         }
+    }
+
+    pub fn get_slice(&self) -> &str {
+        self.slice
     }
 
     pub fn text(&self) -> &'a str {

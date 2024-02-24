@@ -282,7 +282,9 @@ impl Session {
         let mut tokenizer = Tokenizer::new(query);
         let mut token_list = Vec::<Token>::new();
         while let Some(Ok(token)) = tokenizer.next() {
-            token_list.push(token);
+            if token.kind != TokenKind::EOI {
+                token_list.push(token);
+            }
         }
 
         self.dispatcher(is_repl, query, token_list).await
@@ -315,16 +317,15 @@ impl Session {
                 Ok(Some(ServerStats::default()))
             },
             (QueryKind::Set, _) => {
-                let args: Vec<String> = get_put_get_args(query);
-                if args.len() != 3 {
+                if token_list.len() != 3 {
                     eprintln!("set args are invalid, must be 2 argruments");
                     return Ok(Some(ServerStats::default()));
                 }
 
                 let affected = 1;
 
-                let key = &args[1];
-                let value = &args[2];
+                let key = &token_list[1].get_slice();
+                let value = &token_list[2].get_slice();
 
                 let rs = self.engine.set(key.as_bytes(), value.as_bytes().to_vec());
                 match rs {
@@ -341,13 +342,12 @@ impl Session {
                 Ok(Some(ServerStats::default()))
             },
             (QueryKind::Get, _) => {
-                let args: Vec<String> = get_put_get_args(query);
-                if args.len() != 2 {
-                    eprintln!("put args are invalid, must be 1 argruments");
+                if token_list.len() != 2 {
+                    eprintln!("get args are invalid, must be 1 argruments");
                     return Ok(Some(ServerStats::default()));
                 }
 
-                let key = &args[1];
+                let key = &token_list[1].get_slice();
                 let rs = self.engine.get(key.as_bytes());
                 match rs {
                     Ok(v) => {
@@ -364,12 +364,30 @@ impl Session {
                 };
 
                 Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::Del, _) => {
+                if token_list.len() != 2 {
+                    eprintln!("del args are invalid, must be 1 argruments");
+                    return Ok(Some(ServerStats::default()));
+                }
+
+                let key = &token_list[1].get_slice();
+                let rs = self.engine.delete(key.as_bytes());
+                match rs {
+                    Ok(_) => {
+                        eprintln!("OK ~");
+                    }
+                    Err(err) => {
+                        eprintln!("{}", err.to_string());
+                    }
+                };
+
+                Ok(Some(ServerStats::default()))
             }
             (_, _) => {
                 println!("__ {}", &query);
 
-                let stats = ServerStats::default();
-                Ok(Some(stats))
+                Err(anyhow!("UnSupport command: [{}]", &query))
             }
         }
     }
@@ -401,17 +419,12 @@ impl From<TokenKind> for QueryKind {
     fn from(kind: TokenKind) -> Self {
         match kind {
             TokenKind::TIME => QueryKind::Time,
-            TokenKind::SET => QueryKind::Set,
             TokenKind::GET => QueryKind::Get,
+            TokenKind::SET => QueryKind::Set,
+            TokenKind::DEL |
+            TokenKind::DELETE => QueryKind::Del,
             TokenKind::SELECT => QueryKind::Select,
             _ => QueryKind::Select,
         }
     }
-}
-
-fn get_put_get_args(query: &str) -> Vec<String> {
-    query
-        .split_ascii_whitespace()
-        .map(|x| x.to_owned())
-        .collect()
 }

@@ -192,6 +192,8 @@ pub enum TokenKind {
     DEFAULT,
     #[token("DELETE", ignore(ascii_case))]
     DELETE,
+    #[token("DEL", ignore(ascii_case))]
+    DEL,
     #[token("DESC", ignore(ascii_case))]
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]

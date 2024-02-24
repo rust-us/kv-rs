@@ -34,7 +34,8 @@ use crate::storage::log::Log;
 pub struct LogCask {
     /// The active append-only log file.
     log: Log,
-    /// Maps keys to a value position and length in the log file.
+
+    /// use index, Maps keys to a value position and length in the log file.
     keydir: KeyDir,
 }
 
