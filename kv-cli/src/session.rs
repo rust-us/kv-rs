@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::io::BufRead;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -299,8 +300,27 @@ impl Session {
         token_list: Vec<Token<'_>>,
     ) -> Result<Option<ServerStats>> {
 
+        let kind_may = QueryKind::try_from(token_list[0].kind.clone());
+        match kind_may {
+            Ok(kind) => {
+                self.dispatcher_executor(kind, is_repl, query, token_list).await
+            }
+            Err(inf) => {
+                return Err(anyhow!(inf.to_string()));
+            }
+        }
+    }
+
+    /// executor cmd
+    async fn dispatcher_executor(
+        &mut self,
+        kind: QueryKind,
+        is_repl: bool,
+        query: &str,
+        token_list: Vec<Token<'_>>,
+    ) -> Result<Option<ServerStats>> {
+
         let start = Instant::now();
-        let kind = QueryKind::try_from(token_list[0].kind.clone()).unwrap();
 
         match (kind, is_repl) {
             (QueryKind::Time, _) => {
@@ -418,7 +438,7 @@ pub enum QueryKind {
 }
 
 impl TryFrom<TokenKind> for QueryKind {
-    type Error = kv::error::Error;
+    type Error = String;
 
     #[inline(always)]
     fn try_from(kind: TokenKind) -> std::result::Result<Self, Self::Error> {
@@ -436,8 +456,7 @@ impl TryFrom<TokenKind> for QueryKind {
             TokenKind::MGET => Ok(QueryKind::MGet),
             TokenKind::SETEX => Ok(QueryKind::SetEx),
             _ => {
-                let err = format!("NotFound QueryKind: [{:?}]", &kind);
-                Err(Error::Parse(err))
+                Err("UnSupport cmd".to_owned())
             }
         }
     }
