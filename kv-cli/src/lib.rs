@@ -1,3 +1,5 @@
+#![feature(const_trait_impl)]
+
 pub mod config;
 pub mod progressbar;
 pub mod emoji;
@@ -6,6 +8,7 @@ pub mod session;
 pub mod trace;
 pub mod rusty;
 pub mod new;
+pub mod ast;
 
 use crate::progressbar::ProgressOutput;
 

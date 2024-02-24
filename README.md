@@ -78,7 +78,14 @@ Connecting to Client.
 kvcli > 
 ```
 
-### Storage
+### Grammar
+
+| 语法     | CMD                | Desc                                        | DEMO                           |
+|--------|--------------------|---------------------------------------------|--------------------------------|
+| TIME   | TIME               | 返回当前服务器时间                                   |                                |
+| SET    | SET <KEY> <VALUE>  | 设置指定 key 的值。                                | SET ob "redis" <br/> SET key 1 |
+| GET    | GET <KEY>          | 获取指定 key 的值                                 | GET ob                         |
+
 
 ```doc
 ❯ ./kvcli
@@ -92,5 +99,12 @@ kvcli >
 Welcome to kvcli.
 Connecting to Client.
 
-kvcli > set a_key = 1;
+kvcli > SET ob redis
+OK
+
+> GET ob
+"redis"
+
+> DEL ob
+(integer) 1
 ```

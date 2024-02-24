@@ -13,6 +13,8 @@ use rustyline::validate::Validator;
 use rustyline::Context;
 use rustyline::Helper;
 use rustyline::Result;
+use crate::ast::token_kind::TokenKind;
+use crate::ast::tokenizer::{all_reserved_keywords, tokenize_sql};
 
 pub struct CliHelper {
     completer: FilenameCompleter,
@@ -37,8 +39,27 @@ impl CliHelper {
 
 impl Highlighter for CliHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        // let tokens = tokenize_sql(line);
+        let tokens = tokenize_sql(line);
         let mut line = line.to_owned();
+
+        if let Ok(tokens) = tokens {
+            for token in tokens.iter().rev() {
+                if TokenKind::is_keyword(&token.kind)
+                    || TokenKind::is_reserved_ident(&token.kind, false)
+                    || TokenKind::is_reserved_function_name(&token.kind)
+                {
+                    line.replace_range(
+                        token.span.clone(),
+                        &format!("\x1b[1;32m{}\x1b[0m", token.text()),
+                    );
+                } else if TokenKind::is_literal(&token.kind) {
+                    line.replace_range(
+                        token.span.clone(),
+                        &format!("\x1b[1;33m{}\x1b[0m", token.text()),
+                    );
+                }
+            }
+        }
 
         Cow::Owned(line)
     }
@@ -58,7 +79,7 @@ impl Highlighter for CliHelper {
 
     fn highlight_candidate<'c>(
         &self,
-        candidate: &'c str,
+        candidate: &'c str, // FIXME should be Completer::Candidate
         completion: rustyline::CompletionType,
     ) -> std::borrow::Cow<'c, str> {
         let _ = completion;
@@ -130,8 +151,7 @@ impl KeyWordCompleter {
             .split(|p: char| p.is_whitespace() || p == '.')
             .last()
             .unwrap_or(s);
-        // let all_keywords = all_reserved_keywords();
-        let all_keywords = Vec::<String>::new();
+        let all_keywords = all_reserved_keywords();
 
         let mut results: Vec<Pair> = all_keywords
             .iter()

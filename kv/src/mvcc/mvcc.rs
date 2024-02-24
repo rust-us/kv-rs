@@ -17,7 +17,7 @@ impl<E: Engine> Clone for MVCC<E> {
 /// MVCC engine status.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
-    /// The total number of MVCC versions (i.e. read-write transactions).
+    /// The total number of MVCC versions (i.e.  read-write transactions).
     pub versions: u64,
     /// Number of currently active transactions.
     pub active_txns: u64,

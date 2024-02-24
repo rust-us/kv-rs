@@ -1,54 +1,56 @@
 use std::io::BufRead;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::config::ConfigLoad;
+use crate::config::{ConfigLoad, DEFAULT_PROMPT};
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Local};
 use rustyline::{CompletionType, Editor};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use tokio::time::Instant;
+use kv::error::CResult;
 use kv::row::rows::ServerStats;
 use kv::storage::engine::Engine;
 use kv::storage::log_cask::LogCask;
+use crate::ast::token_kind::TokenKind;
+use crate::ast::tokenizer::Tokenizer;
 use crate::rusty::CliHelper;
 
-const DEFAULT_PROMPT: &str = "kvcli";
 
 pub struct Session {
     is_repl: bool,
-    settings: ConfigLoad,
 
+    running: Arc<AtomicBool>,
     engine: Box<dyn Engine>,
 
+    settings: ConfigLoad,
     query: String,
     in_comment_block: bool,
 
     keywords: Arc<Vec<String>>,
-
-    running: Arc<AtomicBool>,
 }
 
 impl Session {
     pub async fn try_new(settings: ConfigLoad, is_repl: bool, running: Arc<AtomicBool>) -> Result<Self> {
         if is_repl {
-            println!("Welcome to kvcli.");
+            println!("Welcome to {}.", DEFAULT_PROMPT);
             println!("Connecting to Client.");
             println!();
         }
 
-        let engine = LogCask::new(settings.storage_path.clone().unwrap())?;
+        let engine = LogCask::new(settings.get_storage_path().clone())?;
 
         let mut keywords = Vec::with_capacity(1024);
 
         Ok(Self {
             is_repl,
-            settings,
+            running,
             engine: Box::new(engine),
+            settings,
             query: String::new(),
             in_comment_block: false,
             keywords: Arc::new(keywords),
-            running,
         })
     }
 
@@ -59,7 +61,7 @@ impl Session {
             if self.settings.prompt.is_some() {
                 let mut prompt = self.settings.prompt.as_ref().unwrap().clone();
                 // prompt = prompt.replace("{user}", &user);
-                format!("{} ", prompt.trim_end())
+                format!("{} > ", prompt.trim_end())
             } else {
                 format!("{} > ", DEFAULT_PROMPT)
             }
@@ -86,9 +88,7 @@ impl Session {
                     let queries = self.append_query(&line);
                     for query in queries {
                         let _ = rl.add_history_entry(&query);
-
-                        let rs = self.handle_query(true, &query).await;
-                        match rs {
+                        match self.handle_query(true, &query).await {
                             Ok(None) => {
                                 break 'F;
                             }
@@ -156,10 +156,15 @@ impl Session {
         Ok(())
     }
 
+    /// 用于输入不完整的命令的追加和补充。
     fn append_query(&mut self, line: &str) -> Vec<String> {
         let line = line.trim();
         if line.is_empty() {
             return vec![];
+        }
+
+        if !self.settings.get_auto_append_part_cmd() {
+            return vec![line.to_owned()];
         }
 
         if self.query.is_empty()
@@ -168,7 +173,7 @@ impl Session {
                 line.starts_with('.')
                 || line == "exit"
                 || line == "quit"
-                || line.to_uppercase().starts_with("PUT")
+                || line.to_uppercase().starts_with("SET")
             )
         {
             return vec![line.to_owned()];
@@ -182,9 +187,66 @@ impl Session {
             }
         }
 
+
+        self.query.push(' ');
+
         let mut queries = Vec::new();
-        queries.push(line.trim().to_owned());
-        self.query.clear();
+        let mut tokenizer = Tokenizer::new(line);
+        let mut in_comment = false;
+        let mut start = 0;
+        let mut comment_block_start = 0;
+
+        let append_part_cmd_symbol = self.settings.get_auto_append_part_cmd_symbol();
+        while let Some(Ok(token)) = tokenizer.next() {
+            match token.kind {
+                TokenKind::SemiColon => {
+                    if in_comment || self.in_comment_block {
+                        continue;
+                    } else {
+                        let mut sql = self.query.trim().to_owned();
+                        if sql.is_empty() {
+                            continue;
+                        }
+
+                        sql.push(';');
+
+                        queries.push(sql);
+                        self.query.clear();
+                    }
+                }
+                TokenKind::Comment => {
+                    in_comment = true;
+                }
+                TokenKind::EOI => {
+                    in_comment = false;
+                }
+                TokenKind::Newline => {
+                    in_comment = false;
+                    self.query.push('\n');
+                }
+                TokenKind::CommentBlockStart => {
+                    if !self.in_comment_block {
+                        comment_block_start = token.span.start;
+                    }
+                    self.in_comment_block = true;
+                }
+                TokenKind::CommentBlockEnd => {
+                    self.in_comment_block = false;
+                    self.query
+                        .push_str(&line[comment_block_start..token.span.end]);
+                }
+                _ => {
+                    if !in_comment && !self.in_comment_block {
+                        self.query.push_str(&line[start..token.span.end]);
+                    }
+                }
+            }
+            start = token.span.end;
+        }
+
+        if self.in_comment_block {
+            self.query.push_str(&line[comment_block_start..]);
+        }
 
         queries
     }
@@ -215,11 +277,120 @@ impl Session {
             return Ok(Some(ServerStats::default()));
         }
 
-        // parser executor cmd
-        println!("cmd: {}", query);
+        self.dispatcher(is_repl, query).await
+    }
 
-        let stats = ServerStats::default();
-        Ok(Some(stats))
+    /// executor cmd
+    async fn dispatcher(
+        &mut self,
+        is_repl: bool,
+        query: &str,
+    ) -> Result<Option<ServerStats>> {
+
+        let start = Instant::now();
+        let kind = QueryKind::from(query);
+
+        match (kind, is_repl) {
+            (QueryKind::Time, _) => {
+                let affected = 1;
+                if is_repl {
+                    let now: DateTime<Local> = Local::now();
+                    let now_format = now.format("%Y-%m-%d %H:%M:%S%.3f");
+                    eprintln!("{}", now_format);
+
+                    if self.settings.is_show_affected() {
+                        if affected > 0 {
+                            eprintln!(
+                                "{} rows affected in ({:.3} sec)",
+                                affected,
+                                start.elapsed().as_secs_f64()
+                            );
+                        } else {
+                            eprintln!("processed in ({:.3} sec)", start.elapsed().as_secs_f64());
+                        }
+                        eprintln!();
+                    }
+                }
+                Ok(Some(ServerStats::default()))
+            },
+            other => {
+                let replace_newline = if self.settings.replace_newline.is_none() {
+                    false
+                } else if !self.settings.replace_newline.as_ref().unwrap() {
+                    false
+                } else {
+                    replace_newline_in_box_display(query)
+                };
+
+                let data = match other.0 {
+                    QueryKind::Set => {
+                        let args: Vec<String> = get_put_get_args(query);
+                        if args.len() != 3 {
+                            eprintln!("set args are invalid, must be 2 argruments");
+                            return Ok(Some(ServerStats::default()));
+                        }
+
+                        let key = &args[1];
+                        let value = &args[2];
+
+                        let rs = self.engine.set(key.as_bytes(), value.as_bytes().to_vec());
+                        match rs {
+                            Ok(_) => {
+                                eprintln!("OK");
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err.to_string());
+                            }
+                        }
+
+                        if self.settings.is_show_affected() {
+                            let affected = 1;
+                            if is_repl {
+                                if affected > 0 {
+                                    eprintln!(
+                                        "{} rows affected in ({:.3} sec)",
+                                        affected,
+                                        start.elapsed().as_secs_f64()
+                                    );
+                                } else {
+                                    eprintln!("processed in ({:.3} sec)", start.elapsed().as_secs_f64());
+                                }
+                                eprintln!();
+                            }
+                        }
+                    },
+                    QueryKind::Get => {
+                        let args: Vec<String> = get_put_get_args(query);
+                        if args.len() != 2 {
+                            eprintln!("put args are invalid, must be 1 argruments");
+                            return Ok(Some(ServerStats::default()));
+                        }
+
+                        let key = &args[1];
+                        let rs = self.engine.get(key.as_bytes());
+                        match rs {
+                            Ok(v) => {
+                                if v.is_none() {
+                                    eprintln!("N/A");
+                                } else {
+                                    let val = v.unwrap();
+                                    eprintln!("{}", String::from_utf8(val).expect("Get engine#get error"));
+                                }
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err.to_string());
+                            }
+                        }
+                    }
+                    _ => {
+                        println!("{}", &query);
+                    },
+                };
+
+                let stats = ServerStats::default();
+                Ok(Some(stats))
+            }
+        }
     }
 }
 
@@ -228,4 +399,54 @@ fn get_history_path() -> String {
         "{}/.kvcli_history",
         std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
     )
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum QueryKind {
+    Info,
+    Time,
+    KSize,
+    Exit,
+    Select,
+    Set,
+    Get,
+    Del,
+    GetSet,
+    MGet,
+    SetEx,
+}
+
+impl From<&str> for QueryKind {
+    fn from(query: &str) -> Self {
+        let mut tz = Tokenizer::new(query);
+        match tz.next() {
+            Some(Ok(t)) => match t.kind {
+                TokenKind::TIME => QueryKind::Time,
+                TokenKind::SET => QueryKind::Set,
+                TokenKind::GET => QueryKind::Get,
+                TokenKind::SELECT => QueryKind::Select,
+                _ => QueryKind::Select,
+            },
+            _ => QueryKind::Select,
+        }
+    }
+}
+
+fn get_put_get_args(query: &str) -> Vec<String> {
+    query
+        .split_ascii_whitespace()
+        .map(|x| x.to_owned())
+        .collect()
+}
+
+fn replace_newline_in_box_display(query: &str) -> bool {
+    let mut tz = Tokenizer::new(query);
+    match tz.next() {
+        Some(Ok(t)) => match t.kind {
+            TokenKind::EXPLAIN => false,
+            TokenKind::SHOW => !matches!(tz.next(), Some(Ok(t)) if t.kind == TokenKind::CREATE),
+            _ => true,
+        },
+        _ => true,
+    }
 }

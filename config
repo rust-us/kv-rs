@@ -1,2 +1,7 @@
 version = 0
 api_key = ""
+prompt = "kvcli"
+show_progress = false
+show_stats = false
+multi_line = true
+replace_newline = true

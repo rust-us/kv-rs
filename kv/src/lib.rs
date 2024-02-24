@@ -10,6 +10,7 @@ pub mod storage;
 pub mod codec;
 pub mod mvcc;
 pub mod row;
+pub mod snapshot;
 
 #[cfg(test)]
 mod test {
