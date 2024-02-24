@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::path::PathBuf;
+use anyhow::anyhow;
 use serde_derive::{Serialize, Deserialize};
 
 const DEFAULT_STORAGE_PATH: &str = "storage/kvdb";
@@ -21,12 +22,11 @@ pub struct ConfigLoad {
     /// progress
     pub progress_color: Option<String>,
     /// Show progress [bar] when executing queries.
-    /// Only works with output format `table` and `null`.
     pub show_progress: Option<bool>,
 
-    /// Show stats after executing queries.
-    /// Only works with non-interactive mode.
+    /// Show stats after executing queries.  Only works with non-interactive mode.
     pub show_stats: Option<bool>,
+    /// Show rows affected
     show_affected: Option<bool>,
 
     /// fix part cmd options. default false
@@ -152,6 +152,22 @@ impl ConfigLoad {
         } else {
             self.auto_append_part_cmd_symbol.as_ref().unwrap().clone()
         }
+    }
+
+    /// change cmd:
+    /// show_progress、show_stats、show_affected、auto_append_part_cmd、auto_append_part_cmd_symbol、multi_line、replace_newline
+    pub fn inject_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> anyhow::Result<()> {
+        match cmd_name {
+            "show_progress" => self.show_progress = Some(cmd_value.parse()?),
+            "show_stats" => self.show_stats = Some(cmd_value.parse()?),
+            "show_affected" => self.show_affected = Some(cmd_value.parse()?),
+            "auto_append_part_cmd" => self.auto_append_part_cmd = Some(cmd_value.parse()?),
+            "auto_append_part_cmd_symbol" => self.auto_append_part_cmd_symbol = Some(cmd_value.parse()?),
+            "multi_line" => self.multi_line = Some(cmd_value.parse()?),
+            "replace_newline" => self.replace_newline = Some(cmd_value.parse()?),
+            _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
+        }
+        Ok(())
     }
 
     pub fn terminal_update(&mut self) {

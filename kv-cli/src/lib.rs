@@ -9,6 +9,7 @@ pub mod trace;
 pub mod rusty;
 pub mod new;
 pub mod ast;
+mod show;
 
 use crate::progressbar::ProgressOutput;
 

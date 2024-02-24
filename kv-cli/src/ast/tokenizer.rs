@@ -8,14 +8,16 @@ type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub source: &'a str,
+    pub slice: &'a str,
     pub kind: TokenKind,
     pub span: Range<usize>,
 }
 
 impl<'a> Token<'a> {
-    pub fn new_eoi(source: &'a str) -> Self {
+    fn new_eoi(source: &'a str) -> Self {
         Token {
             source,
+            slice: "",
             kind: TokenKind::EOI,
             span: (source.len()..source.len()),
         }
@@ -56,6 +58,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             Some(Err(_)) => Some(Err("unable to recognize the rest tokens".to_string())),
             Some(Ok(kind)) => Some(Ok(Token {
                 source: self.source,
+                slice: self.lexer.slice(),
                 kind,
                 span: self.lexer.span(),
             })),

@@ -4,19 +4,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::config::{ConfigLoad, DEFAULT_PROMPT};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
+use log::info;
 use rustyline::{CompletionType, Editor};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use tokio::time::Instant;
-use kv::error::CResult;
 use kv::row::rows::ServerStats;
 use kv::storage::engine::Engine;
 use kv::storage::log_cask::LogCask;
 use crate::ast::token_kind::TokenKind;
-use crate::ast::tokenizer::Tokenizer;
+use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
-
+use crate::show::Show;
 
 pub struct Session {
     is_repl: bool,
@@ -187,7 +187,6 @@ impl Session {
             }
         }
 
-
         self.query.push(' ');
 
         let mut queries = Vec::new();
@@ -259,7 +258,7 @@ impl Session {
     ) -> Result<Option<ServerStats>> {
         let query = query.trim_end_matches(';').trim();
         if is_repl && (query == "exit" || query == "quit") {
-            return Ok(None);
+            return Ok(None); // exit
         }
 
         if is_repl && query.starts_with('.') {
@@ -273,11 +272,20 @@ impl Session {
                 ));
             }
 
-            // self.settings.inject_ctrl_cmd(query[0], query[1])?;
+            self.settings.inject_cmd(query[0], query[1])?;
+            info!("refresh config: {:?}", &self.settings);
+            eprintln!("Refresh Config OK ~");
+
             return Ok(Some(ServerStats::default()));
         }
 
-        self.dispatcher(is_repl, query).await
+        let mut tokenizer = Tokenizer::new(query);
+        let mut token_list = Vec::<Token>::new();
+        while let Some(Ok(token)) = tokenizer.next() {
+            token_list.push(token);
+        }
+
+        self.dispatcher(is_repl, query, token_list).await
     }
 
     /// executor cmd
@@ -285,107 +293,80 @@ impl Session {
         &mut self,
         is_repl: bool,
         query: &str,
+        token_list: Vec<Token<'_>>,
     ) -> Result<Option<ServerStats>> {
 
         let start = Instant::now();
-        let kind = QueryKind::from(query);
+        let kind = QueryKind::try_from(token_list[0].kind.clone()).unwrap();
 
         match (kind, is_repl) {
             (QueryKind::Time, _) => {
                 let affected = 1;
                 if is_repl {
+                    // data
                     let now: DateTime<Local> = Local::now();
                     let now_format = now.format("%Y-%m-%d %H:%M:%S%.3f");
                     eprintln!("{}", now_format);
 
-                    if self.settings.is_show_affected() {
-                        if affected > 0 {
-                            eprintln!(
-                                "{} rows affected in ({:.3} sec)",
-                                affected,
-                                start.elapsed().as_secs_f64()
-                            );
-                        } else {
-                            eprintln!("processed in ({:.3} sec)", start.elapsed().as_secs_f64());
-                        }
-                        eprintln!();
-                    }
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                    show.output(affected);
                 }
+
                 Ok(Some(ServerStats::default()))
             },
-            other => {
-                let replace_newline = if self.settings.replace_newline.is_none() {
-                    false
-                } else if !self.settings.replace_newline.as_ref().unwrap() {
-                    false
-                } else {
-                    replace_newline_in_box_display(query)
-                };
+            (QueryKind::Set, _) => {
+                let args: Vec<String> = get_put_get_args(query);
+                if args.len() != 3 {
+                    eprintln!("set args are invalid, must be 2 argruments");
+                    return Ok(Some(ServerStats::default()));
+                }
 
-                let data = match other.0 {
-                    QueryKind::Set => {
-                        let args: Vec<String> = get_put_get_args(query);
-                        if args.len() != 3 {
-                            eprintln!("set args are invalid, must be 2 argruments");
-                            return Ok(Some(ServerStats::default()));
-                        }
+                let affected = 1;
 
-                        let key = &args[1];
-                        let value = &args[2];
+                let key = &args[1];
+                let value = &args[2];
 
-                        let rs = self.engine.set(key.as_bytes(), value.as_bytes().to_vec());
-                        match rs {
-                            Ok(_) => {
-                                eprintln!("OK");
-                            }
-                            Err(err) => {
-                                eprintln!("{}", err.to_string());
-                            }
-                        }
+                let rs = self.engine.set(key.as_bytes(), value.as_bytes().to_vec());
+                match rs {
+                    Ok(_) => {
+                        eprintln!("OK ~");
+                    }
+                    Err(err) => {
+                        eprintln!("{}", err.to_string());
+                    }
+                }
 
-                        if self.settings.is_show_affected() {
-                            let affected = 1;
-                            if is_repl {
-                                if affected > 0 {
-                                    eprintln!(
-                                        "{} rows affected in ({:.3} sec)",
-                                        affected,
-                                        start.elapsed().as_secs_f64()
-                                    );
-                                } else {
-                                    eprintln!("processed in ({:.3} sec)", start.elapsed().as_secs_f64());
-                                }
-                                eprintln!();
-                            }
-                        }
-                    },
-                    QueryKind::Get => {
-                        let args: Vec<String> = get_put_get_args(query);
-                        if args.len() != 2 {
-                            eprintln!("put args are invalid, must be 1 argruments");
-                            return Ok(Some(ServerStats::default()));
-                        }
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                show.output(affected);
+                Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::Get, _) => {
+                let args: Vec<String> = get_put_get_args(query);
+                if args.len() != 2 {
+                    eprintln!("put args are invalid, must be 1 argruments");
+                    return Ok(Some(ServerStats::default()));
+                }
 
-                        let key = &args[1];
-                        let rs = self.engine.get(key.as_bytes());
-                        match rs {
-                            Ok(v) => {
-                                if v.is_none() {
-                                    eprintln!("N/A");
-                                } else {
-                                    let val = v.unwrap();
-                                    eprintln!("{}", String::from_utf8(val).expect("Get engine#get error"));
-                                }
-                            }
-                            Err(err) => {
-                                eprintln!("{}", err.to_string());
-                            }
+                let key = &args[1];
+                let rs = self.engine.get(key.as_bytes());
+                match rs {
+                    Ok(v) => {
+                        if v.is_none() {
+                            eprintln!("N/A ~");
+                        } else {
+                            let val = v.unwrap();
+                            eprintln!("{}", String::from_utf8(val).expect("Get engine#get error"));
                         }
                     }
-                    _ => {
-                        println!("{}", &query);
-                    },
+                    Err(err) => {
+                        eprintln!("{}", err.to_string());
+                    }
                 };
+
+                Ok(Some(ServerStats::default()))
+            }
+            (_, _) => {
+                println!("__ {}", &query);
 
                 let stats = ServerStats::default();
                 Ok(Some(stats))
@@ -416,17 +397,13 @@ pub enum QueryKind {
     SetEx,
 }
 
-impl From<&str> for QueryKind {
-    fn from(query: &str) -> Self {
-        let mut tz = Tokenizer::new(query);
-        match tz.next() {
-            Some(Ok(t)) => match t.kind {
-                TokenKind::TIME => QueryKind::Time,
-                TokenKind::SET => QueryKind::Set,
-                TokenKind::GET => QueryKind::Get,
-                TokenKind::SELECT => QueryKind::Select,
-                _ => QueryKind::Select,
-            },
+impl From<TokenKind> for QueryKind {
+    fn from(kind: TokenKind) -> Self {
+        match kind {
+            TokenKind::TIME => QueryKind::Time,
+            TokenKind::SET => QueryKind::Set,
+            TokenKind::GET => QueryKind::Get,
+            TokenKind::SELECT => QueryKind::Select,
             _ => QueryKind::Select,
         }
     }
@@ -437,16 +414,4 @@ fn get_put_get_args(query: &str) -> Vec<String> {
         .split_ascii_whitespace()
         .map(|x| x.to_owned())
         .collect()
-}
-
-fn replace_newline_in_box_display(query: &str) -> bool {
-    let mut tz = Tokenizer::new(query);
-    match tz.next() {
-        Some(Ok(t)) => match t.kind {
-            TokenKind::EXPLAIN => false,
-            TokenKind::SHOW => !matches!(tz.next(), Some(Ok(t)) if t.kind == TokenKind::CREATE),
-            _ => true,
-        },
-        _ => true,
-    }
 }
