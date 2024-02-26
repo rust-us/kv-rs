@@ -1,7 +1,7 @@
-version = 0
-api_key = ""
-prompt = "kvcli"
-show_progress = false
-show_stats = false
-multi_line = true
-replace_newline = true
+version = 1
+api_key = "abcd"
+# storage_path = "/media/fengyang/App-1T/workspace/kv/storage"
+
+# [cli]
+# show_affected = false
+# show_progress = false

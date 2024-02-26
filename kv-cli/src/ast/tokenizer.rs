@@ -1,7 +1,7 @@
 use std::ops::Range;
 use logos::{Lexer, Logos};
 use strum::IntoEnumIterator;
-use crate::ast::token_kind::TokenKind;
+use crate::ast::token_kind::{Keywords, TokenKind};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -77,9 +77,11 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 pub fn all_reserved_keywords() -> Vec<String> {
     let mut result = Vec::new();
-    for token in TokenKind::iter() {
+    for token in Keywords::iter() {
         result.push(format!("{:?}", token).to_ascii_lowercase());
     }
+    result.push("get <key>".to_ascii_lowercase());
+    result.push("set <key> <value>".to_ascii_lowercase());
     result
 }
 

@@ -109,7 +109,8 @@ impl Engine for LogCask {
         }
     }
 
-    fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_> {
+    fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_>
+        where Self: Sized {
         LogScanIterator { inner: self.keydir.range(range), log: &mut self.log }
     }
 

@@ -22,7 +22,7 @@ impl Show {
         }
     }
 
-    pub fn output(&self, affected: i32) {
+    pub fn output(&self, affected: i64) {
         if self.is_show_affected && self.is_repl {
             if affected > 0 {
                 eprintln!(

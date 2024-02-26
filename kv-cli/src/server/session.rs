@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use std::io::BufRead;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::config::{ConfigLoad, DEFAULT_PROMPT};
+use crate::server::config::{ConfigLoad, DEFAULT_PROMPT};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
 use log::info;
@@ -11,7 +11,8 @@ use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use tokio::time::Instant;
-use kv::error::Error;
+use kv::error::{CResult, Error};
+use kv::info::get_info;
 use kv::row::rows::ServerStats;
 use kv::storage::engine::Engine;
 use kv::storage::log_cask::LogCask;
@@ -24,7 +25,7 @@ pub struct Session {
     is_repl: bool,
 
     running: Arc<AtomicBool>,
-    engine: Box<dyn Engine>,
+    engine: LogCask,
 
     settings: ConfigLoad,
     query: String,
@@ -48,7 +49,7 @@ impl Session {
         Ok(Self {
             is_repl,
             running,
-            engine: Box::new(engine),
+            engine: engine,
             settings,
             query: String::new(),
             in_comment_block: false,
@@ -258,6 +259,7 @@ impl Session {
         is_repl: bool,
         query: &str,
     ) -> Result<Option<ServerStats>> {
+
         let query = query.trim_end_matches(';').trim();
         if is_repl && (query == "exit" || query == "quit") {
             return Ok(None); // exit
@@ -293,7 +295,7 @@ impl Session {
     }
 
     /// executor cmd
-    async fn dispatcher(
+    async fn dispatcher (
         &mut self,
         is_repl: bool,
         query: &str,
@@ -312,7 +314,7 @@ impl Session {
     }
 
     /// executor cmd
-    async fn dispatcher_executor(
+    async fn dispatcher_executor (
         &mut self,
         kind: QueryKind,
         is_repl: bool,
@@ -323,16 +325,85 @@ impl Session {
         let start = Instant::now();
 
         match (kind, is_repl) {
-            (QueryKind::Time, _) => {
-                let affected = 1;
+            (QueryKind::Info, _) => {
                 if is_repl {
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+
+                    for info in get_info(&mut self.engine) {
+                        eprintln!("{}", info);
+                    }
+                    show.output(1);
+                }
+
+                Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::Time, _) => {
+                if is_repl {
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+
                     // data
                     let now: DateTime<Local> = Local::now();
                     let now_format = now.format("%Y-%m-%d %H:%M:%S%.3f");
                     eprintln!("{}", now_format);
 
-                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
-                    show.output(affected);
+                    show.output(1);
+                }
+
+                Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::KSize, _) => unsafe {
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+
+                // // 或者前缀搜索，或者检索元数据/索引, 或者直接元数据取size
+                // let mut scan_all = self.engine.scan(..).collect::<CResult<Vec<_>>>()?;
+                // let size = scan_all.len();
+                let status = self.engine.status();
+                let size = if status.is_ok() {
+                    status.unwrap().keys as i64
+                } else {
+                    0
+                };
+
+                if is_repl {
+                    eprintln!("{}", size);
+
+                    show.output(size);
+                }
+
+                self.engine.compact().expect("engine.compact");
+
+                Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::Show, _) => unsafe {
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+
+                let option = &token_list[1].get_slice();
+
+                let path = self.engine.get_path();
+                if is_repl {
+                    eprintln!("{}", path.unwrap());
+
+                    show.output(1);
+                }
+
+                self.engine.compact().expect("engine.compact");
+
+                Ok(Some(ServerStats::default()))
+            },
+            (QueryKind::Keys, _) => unsafe {
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+
+                // 或者前缀搜索，或者检索元数据/索引, 或者直接元数据取size
+                let mut scan_all = self.engine.scan_prefix(b"");
+
+                if is_repl {
+                    let mut size = 0;
+                    while let Some((key, value)) = scan_all.next().transpose()? {
+                        eprintln!("{}", String::from_utf8_unchecked(key).as_str());
+                        size += 1;
+                    }
+
+                    show.output(size);
                 }
 
                 Ok(Some(ServerStats::default()))
@@ -343,7 +414,7 @@ impl Session {
                     return Ok(Some(ServerStats::default()));
                 }
 
-                let affected = 1;
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
 
                 let key = &token_list[1].get_slice();
                 let value = &token_list[2].get_slice();
@@ -357,9 +428,8 @@ impl Session {
                         eprintln!("{}", err.to_string());
                     }
                 }
+                show.output(1);
 
-                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
-                show.output(affected);
                 Ok(Some(ServerStats::default()))
             },
             (QueryKind::Get, _) => {
@@ -367,6 +437,7 @@ impl Session {
                     eprintln!("get args are invalid, must be 1 argruments");
                     return Ok(Some(ServerStats::default()));
                 }
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
 
                 let key = &token_list[1].get_slice();
                 let rs = self.engine.get(key.as_bytes());
@@ -384,6 +455,8 @@ impl Session {
                     }
                 };
 
+                show.output(1);
+
                 Ok(Some(ServerStats::default()))
             },
             (QueryKind::Del, _) => {
@@ -391,6 +464,8 @@ impl Session {
                     eprintln!("del args are invalid, must be 1 argruments");
                     return Ok(Some(ServerStats::default()));
                 }
+
+                let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
 
                 let key = &token_list[1].get_slice();
                 let rs = self.engine.delete(key.as_bytes());
@@ -402,6 +477,7 @@ impl Session {
                         eprintln!("{}", err.to_string());
                     }
                 };
+                show.output(1);
 
                 Ok(Some(ServerStats::default()))
             }
@@ -429,6 +505,7 @@ pub enum QueryKind {
     Exit,
     Select,
     Keys,
+    Show,
     Set,
     Get,
     Del,
@@ -452,6 +529,7 @@ impl TryFrom<TokenKind> for QueryKind {
             TokenKind::KSize => Ok(QueryKind::KSize),
             TokenKind::SELECT => Ok(QueryKind::Select),
             TokenKind::KEYS => Ok(QueryKind::Keys),
+            TokenKind::SHOW => Ok(QueryKind::Show),
             TokenKind::GETSET => Ok(QueryKind::GetSet),
             TokenKind::MGET => Ok(QueryKind::MGet),
             TokenKind::SETEX => Ok(QueryKind::SetEx),

@@ -248,6 +248,8 @@ pub enum TokenKind {
     INFO,
     #[token("KSize", ignore(ascii_case))]
     KSize,
+    #[token("EXIT", ignore(ascii_case))]
+    EXIT,
     #[token("TIMESTAMP", ignore(ascii_case))]
     TIMESTAMP,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
@@ -262,6 +264,25 @@ pub enum TokenKind {
     YEAR,
 }
 
+#[allow(non_camel_case_types)]
+#[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Keywords {
+    INFO,
+    TIME,
+    KSize,
+    KEYS,
+    SELECT,
+    SET,
+    GET,
+    DEL,
+    DELETE,
+    GETSET,
+    MGET,
+    SETEX,
+    SHOW,
+    EXIT,
+}
+
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 impl TokenKind {
     pub fn is_literal(&self) -> bool {
@@ -271,59 +292,24 @@ impl TokenKind {
         )
     }
 
+    /// 关键字
     pub fn is_keyword(&self) -> bool {
         !matches!(
             self,
-            Ident
-                | QuotedString
-                | PGLiteralHex
-                | MySQLLiteralHex
-                | LiteralInteger
-                | LiteralFloat
-                | DoubleEq
-                | Eq
-                | NotEq
-                | Lt
-                | Gt
-                | Lte
-                | Gte
-                | Spaceship
-                | Plus
-                | Minus
-                | Multiply
-                | Divide
-                | Modulo
-                | StringConcat
-                | LParen
-                | RParen
-                | Comma
-                | Period
-                | Colon
-                | DoubleColon
-                | SemiColon
-                | Backslash
-                | LBracket
-                | RBracket
-                | BitWiseAnd
-                | BitWiseOr
-                | Caret
-                | Factorial
-                | LBrace
-                | RBrace
-                | RArrow
-                | FatRArrow
-                | BitWiseXor
-                | BitWiseNot
-                | TildeAsterisk
-                | ExclamationMarkTilde
-                | ExclamationMarkTildeAsterisk
-                | ShiftLeft
-                | ShiftRight
-                | DoubleExclamationMark
-                | Abs
-                | SquareRoot
-                | CubeRoot
-                | EOI
+                INFO
+                | TIME
+                | KSize
+                | KEYS
+                | SELECT
+                | SET
+                | GET
+                | DEL
+                | DELETE
+                | GETSET
+                | MGET
+                | SETEX
+                | SHOW
+                | EXIT
         )
     }
 

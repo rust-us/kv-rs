@@ -37,7 +37,8 @@ impl Engine for Memory {
         Ok(self.data.get(key).cloned())
     }
 
-    fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_> {
+    fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_>
+        where Self: Sized {
         MemoryScanIterator { inner: self.data.range(range) }
     }
 

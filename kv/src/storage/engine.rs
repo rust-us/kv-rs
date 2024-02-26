@@ -25,8 +25,7 @@ pub trait Engine: std::fmt::Display + Send + Sync {
 
     /// Iterates over an ordered range of key/value pairs.
     fn scan(&mut self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Self::ScanIterator<'_>
-        where
-            Self: Sized; // omit in trait objects, for object safety
+        where Self: Sized; // omit in trait objects, for object safety
 
     /// Like scan, but can be used from trait objects. The iterator will use
     /// dynamic dispatch, which has a minor performance penalty.

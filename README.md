@@ -82,14 +82,15 @@ kvcli >
 
 | 语法     | CMD                | Desc                                        | DEMO                           |
 |--------|--------------------|---------------------------------------------|--------------------------------|
-| INFO   | INFO               | 查看服务状态和相关信息                                 |                                |
-| TIME   | TIME               | 返回当前服务器时间                                   |                                |
-| KSIZE  | KSIZE              | 返回当前库文件的 key 的数量                            |                                |
-| EXIT   | exit               | 关闭当前连接                                      |                                |
+| INFO   | INFO               | 查看服务状态和相关信息                                 | INFO                           |
+| TIME   | TIME               | 返回当前服务器时间                                   | TIME                           |
+| KSIZE  | KSIZE              | 返回当前库文件的 key 的数量                            | KSIZE                          |
+| EXIT   | exit               | 关闭当前连接                                      | exit                           |
+| SHOW   | SHOW DB            | 显示当前使用的库文件                                  | SHOW DB                        |
 | SELECT | SELECT <db>        | 切换到指定的库文件                                   |                                |
 | SET    | SET <KEY> <VALUE>  | 设置指定 key 的值。                                | SET ob "redis" <br/> SET key 1 |
 | GET    | GET <KEY>          | 获取指定 key 的值                                 | GET ob                         |
-| KEYS   | KEYS               | key list                                    |                                |
+| KEYS   | KEYS               | key list                                    | KEYS                           |
 | DEL    | DEL <KEY>          |                                             | DEL ob                         |
 | DELETE | DELETE <KEY>       |                                             | DELETE ob                      |
 | GETSET | GETSET key value   | 将给定 key 的值设为 value ，并返回 key 的旧值(old value)。 |                                |
@@ -109,11 +110,11 @@ kvcli >
 Welcome to kvcli.
 Connecting to Client.
 
-kvcli > SET ob redis
+kvcli > SET ob xxx
 OK
 
 > GET ob
-"redis"
+"xxx"
 
 > DEL ob
 (integer) 1
@@ -122,12 +123,12 @@ OK
 ### Config
 
 ### 在 terminal 终端模式下， Refresh Config
-| CMD                | Desc                                        |
-|--------------------|---------------------------------------------|
-| .show_progress 【true | false】 | Show progress [bar] when executing queries.  Default false   |
-| .show_stats 【true | false】 | Show stats after executing queries.  Only works with non-interactive mode.  |
-| .show_affected 【true | false】 | Show rows affected |
-| .auto_append_part_cmd 【true | false】 | fix part cmd options. default false  |
-| .auto_append_part_cmd_symbol 【true | false】 | Division symbol  |
-| .multi_line 【true | false】 | Multi line mode, default is true. |
-| .replace_newline 【true | false】 | whether replace '\n' with '\\n', default true. |
+| CMD                               | Desc                                        |
+|-----------------------------------|---------------------------------------------|
+| .show_progress 【true, false】      | Show progress [bar] when executing queries.  Default false   |
+| .show_stats 【true, false】 | Show stats after executing queries.  Only works with non-interactive mode.  |
+| .show_affected 【true, false】 | Show rows affected |
+| .auto_append_part_cmd 【true, false】 | fix part cmd options. default false  |
+| .auto_append_part_cmd_symbol 【true, false】 | Division symbol  |
+| .multi_line 【true, false】 | Multi line mode, default is true. |
+| .replace_newline 【true, false】 | whether replace '\n' with '\\n', default true. |

@@ -11,6 +11,7 @@ pub mod codec;
 pub mod mvcc;
 pub mod row;
 pub mod snapshot;
+pub mod info;
 
 #[cfg(test)]
 mod test {

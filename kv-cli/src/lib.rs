@@ -1,15 +1,14 @@
 #![feature(const_trait_impl)]
 
-pub mod config;
 pub mod progressbar;
 pub mod emoji;
 pub mod command;
-pub mod session;
 pub mod trace;
 pub mod rusty;
 pub mod new;
 pub mod ast;
-mod show;
+pub mod show;
+pub mod server;
 
 use crate::progressbar::ProgressOutput;
 

@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use anyhow::anyhow;
 use serde_derive::{Serialize, Deserialize};
@@ -7,6 +7,7 @@ const DEFAULT_STORAGE_PATH: &str = "storage/kvdb";
 pub const DEFAULT_PROMPT: &str = "kvcli";
 pub const DEFAULT_DB_NAME: &str = "kvdb";
 
+/// load configration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigLoad {
     version: u8,
@@ -19,15 +20,8 @@ pub struct ConfigLoad {
     /// prompt
     pub prompt: Option<String>,
 
-    /// progress
-    pub progress_color: Option<String>,
-    /// Show progress [bar] when executing queries.
-    pub show_progress: Option<bool>,
-
     /// Show stats after executing queries.  Only works with non-interactive mode.
     pub show_stats: Option<bool>,
-    /// Show rows affected
-    show_affected: Option<bool>,
 
     /// fix part cmd options. default false
     auto_append_part_cmd: Option<bool>,
@@ -40,6 +34,22 @@ pub struct ConfigLoad {
     /// whether replace '\n' with '\\n', default true.
     pub replace_newline: Option<bool>,
 
+    cli: Option<CliConfig>,
+
+}
+
+/// load configration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CliConfig {
+    /// Show rows affected
+    show_affected: Option<bool>,
+
+    /// progress
+    pub progress_color: Option<String>,
+
+    /// Show progress [bar] when executing queries.
+    pub show_progress: Option<bool>,
+
     // 输出格式化
 
 }
@@ -51,78 +61,29 @@ impl Default for ConfigLoad {
             api_key: "".to_string(),
             storage_path: None,
             prompt: Some(DEFAULT_PROMPT.to_string()),
-            progress_color: None,
-            show_progress: Some(false),
             show_stats: Some(false),
-            show_affected: Some(false),
             auto_append_part_cmd: Some(false),
             auto_append_part_cmd_symbol: Some(';'),
             multi_line: Some(true),
             replace_newline: Some(true),
+            cli: Some(CliConfig::default()),
         }
     }
 }
 
-// impl Debug for ConfigLoad {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let mut builder = f.debug_struct("ConfigLoad");
-//
-//         builder.field("version", &self.version);
-//         builder.field("api_key", &self.api_key);
-//
-//         if self.storage_path.is_some() {
-//             builder.field("storage_path", &self.storage_path.as_ref().unwrap());
-//         } else {
-//             builder.field("storage_path", &"config");
-//         }
-//
-//         if self.prompt.is_some() {
-//             builder.field("prompt", &self.prompt.as_ref().unwrap());
-//         }
-//
-//         if self.progress_color.is_some() {
-//             builder.field("progress_color", &self.progress_color.as_ref().unwrap());
-//         }
-//         if self.show_progress.is_some() {
-//             builder.field("show_progress", &self.show_progress.as_ref().unwrap());
-//         } else {
-//             builder.field("show_progress", &"false");
-//         }
-//
-//         if self.show_stats.is_some() {
-//             builder.field("show_stats", &self.show_stats.as_ref().unwrap());
-//         } else {
-//             builder.field("show_stats", &"false");
-//         }
-//
-//         if self.show_affected.is_some() {
-//             builder.field("show_affected", &self.show_affected.as_ref().unwrap());
-//         } else {
-//             builder.field("show_affected", &"false");
-//         }
-//
-//         if self.multi_line.is_some() {
-//             builder.field("multi_line", &self.multi_line.as_ref().unwrap());
-//         } else {
-//             builder.field("multi_line", &"false");
-//         }
-//
-//         if self.replace_newline.is_some() {
-//             builder.field("replace_newline", &self.replace_newline.as_ref().unwrap());
-//         } else {
-//             builder.field("replace_newline", &"false");
-//         }
-//
-//         builder.finish()
-//     }
-// }
-
 impl ConfigLoad {
     pub fn is_show_affected(&self) -> bool {
-        if self.show_affected.is_none() {
-            false
-        } else {
-            self.show_affected.clone().unwrap()
+        match self.cli.as_ref() {
+            None => {
+                false
+            }
+            Some(c) => {
+                if c.is_show_affected().is_none() {
+                    false
+                } else {
+                    c.is_show_affected().unwrap().clone()
+                }
+            }
         }
     }
 
@@ -158,9 +119,14 @@ impl ConfigLoad {
     /// show_progress、show_stats、show_affected、auto_append_part_cmd、auto_append_part_cmd_symbol、multi_line、replace_newline
     pub fn inject_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> anyhow::Result<()> {
         match cmd_name {
-            "show_progress" => self.show_progress = Some(cmd_value.parse()?),
+            // cli
+            "show_progress" => {
+                self.set_show_progress(cmd_value.parse()?);
+            },
+            "show_affected" => {
+                self.set_show_affected(cmd_value.parse()?);
+            },
             "show_stats" => self.show_stats = Some(cmd_value.parse()?),
-            "show_affected" => self.show_affected = Some(cmd_value.parse()?),
             "auto_append_part_cmd" => self.auto_append_part_cmd = Some(cmd_value.parse()?),
             "auto_append_part_cmd_symbol" => self.auto_append_part_cmd_symbol = Some(cmd_value.parse()?),
             "multi_line" => self.multi_line = Some(cmd_value.parse()?),
@@ -171,7 +137,8 @@ impl ConfigLoad {
     }
 
     pub fn terminal_update(&mut self) {
-        self.show_progress = Some(true);
+        self.set_show_progress(true);
+
         self.show_stats = Some(true);
     }
 
@@ -182,5 +149,55 @@ impl ConfigLoad {
             let config_path = self.storage_path.as_ref().unwrap().join(DEFAULT_DB_NAME);
             self.storage_path = Some(config_path);
         }
+    }
+
+    fn set_show_progress(&mut self, v: bool) {
+        match self.cli.as_mut() {
+            None => {
+                let mut cli = CliConfig::default();
+                cli.set_show_progress(v);
+                self.cli = Some(cli);
+            }
+            Some(c) => {
+                c.set_show_progress(v);
+            }
+        }
+    }
+
+    fn set_show_affected(&mut self, v: bool) {
+        match self.cli.as_mut() {
+            None => {
+                let mut cli = CliConfig::default();
+                cli.set_show_affected(v);
+                self.cli = Some(cli);
+            }
+            Some(c) => {
+                c.set_show_affected(v);
+            }
+        }
+    }
+}
+
+impl Default for CliConfig {
+    fn default() -> Self {
+        CliConfig {
+            show_affected: Some(false),
+            progress_color: None,
+            show_progress: Some(false),
+        }
+    }
+}
+
+impl CliConfig {
+    pub fn is_show_affected(&self) -> Option<&bool> {
+        self.show_affected.as_ref()
+    }
+
+    pub fn set_show_affected(&mut self, show_affected: bool) {
+        self.show_affected = Some(show_affected);
+    }
+
+    pub fn set_show_progress(&mut self, show_progress: bool) {
+        self.show_progress = Some(show_progress);
     }
 }

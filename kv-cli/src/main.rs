@@ -14,22 +14,23 @@ use clap::{CommandFactory, Parser};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use human_panic::setup_panic;
 use log::info;
-use kvcli::{command, PBAR, session, trace};
+use kvcli::{command, PBAR, trace};
 use kvcli::command::{Command, run_pack};
-use kvcli::config::{ConfigLoad};
+use kvcli::server::config::{ConfigLoad};
+use kvcli::server::session;
 
 #[derive(Debug, Parser, PartialEq)]
 #[command(version)]
 // disable default help flag since it would conflict with --host
 #[command(author, about, disable_help_flag = true)]
 pub struct Args {
-    #[clap(short, long, help = "debug model", default_value = "false")]
+    #[clap(short, long, help = "debug model", default_value = "true")]
     debug: bool,
 
     #[clap(long, help = "Print help information")]
     help: bool,
 
-    #[clap(long = "storage_path")]
+    #[clap(long = "storage_path", default_value = "config")]
     /// load config path, default '${pwd}/config'
     config_path: Option<PathBuf>,
 
