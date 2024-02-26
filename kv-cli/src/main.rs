@@ -24,7 +24,7 @@ use kvcli::server::session;
 // disable default help flag since it would conflict with --host
 #[command(author, about, disable_help_flag = true)]
 pub struct Args {
-    #[clap(short, long, help = "debug model", default_value = "true")]
+    #[clap(short, long, help = "debug model")]
     debug: bool,
 
     #[clap(long, help = "Print help information")]
