@@ -1,7 +1,7 @@
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use fs4::FileExt;
-use crate::error::CResult;
+use crate::error::{CResult, Error};
 use crate::storage::KeyDir;
 
 /// A append-only log file, containing a sequence of key/value entries encoded as follows;
@@ -27,10 +27,20 @@ impl Log {
 
     pub fn new_with_lock(path: PathBuf, try_lock: bool) -> CResult<Self> {
         if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?
+            match std::fs::create_dir_all(dir) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Err(Error::Internal(format!("{}:{:?}", err.to_string(), dir.to_str())))
+                }
+            }
         }
 
-        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(&path)?;
+        let file = std::fs::OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .create(true)
+                            // .create_new(true)
+                            .open(&path)?;
 
         if try_lock {
             // 锁文件。 不允许其他进程篡改。 如果其他进程尝试篡改，则报错： "另一个程序已锁定文件的一部分，进程无法访问。 (os error 33)"

@@ -11,7 +11,6 @@ use std::{env, panic, thread};
 use std::time::Duration;
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
-use signal_hook::{consts::SIGINT, iterator::Signals};
 use human_panic::setup_panic;
 use log::info;
 use kvcli::{command, PBAR, trace};

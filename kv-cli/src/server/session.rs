@@ -42,14 +42,14 @@ impl Session {
             println!();
         }
 
-        let engine = LogCask::new(settings.get_storage_path().clone())?;
+        let engine = LogCask::new_with_lock(settings.get_storage_path().clone(), false)?;
 
         let mut keywords = Vec::with_capacity(1024);
 
         Ok(Self {
             is_repl,
             running,
-            engine: engine,
+            engine,
             settings,
             query: String::new(),
             in_comment_block: false,
@@ -370,7 +370,13 @@ impl Session {
                     show.output(size);
                 }
 
-                self.engine.compact().expect("engine.compact");
+                let c_rs = self.engine.compact();
+                match c_rs {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("{:?}", err.to_string());
+                    }
+                }
 
                 Ok(Some(ServerStats::default()))
             },

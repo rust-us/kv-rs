@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use crate::error::CResult;
+use crate::error::{CResult, Error};
 use crate::storage::{KeyDir, ScanIteratorT, Status};
 use crate::storage::engine::Engine;
 use crate::storage::log::Log;
@@ -153,10 +153,54 @@ impl LogCask {
     /// only live keys and replacing the current file with it.
     pub fn compact(&mut self) -> CResult<()> {
         let mut tmp_path = self.log.path.clone();
+        // need double disk size
         tmp_path.set_extension("new");
+
         let (mut new_log, new_keydir) = self.write_log(tmp_path)?;
 
-        std::fs::rename(&new_log.path, &self.log.path)?;
+        if cfg!(target_os = "windows") {
+            // println!("on Windows, from can be anything, \
+            // but to must not be a directory.{}, {}, {}, {}, {}",
+            //          &self.log.path.is_dir(),
+            //          &self.log.path.is_absolute(),
+            //          &self.log.path.is_relative(),
+            //          &self.log.path.is_symlink(),
+            //          &self.log.path.is_file());
+
+            match std::fs::rename(&new_log.path, &self.log.path) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Err(Error::Value(
+                        format!("db file compact error on Windows, from {:?} to {:?}, cause:{}.",
+                                &new_log.path.to_str(),
+                                &self.log.path.to_str(), err.to_string())
+                    ))
+                }
+            };
+        } else if cfg!(target_os = "linux"){
+            match std::fs::rename(&new_log.path, &self.log.path) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Err(Error::Value(
+                        format!("db file compact error on Linux, from {:?} to {:?}, cause:{}.",
+                                &new_log.path.to_str(),
+                                &self.log.path.to_str(), err.to_string())
+                    ))
+                }
+            };
+        } else {
+            match std::fs::rename(&new_log.path, &self.log.path) {
+                Ok(_) => {}
+                Err(err) => {
+                    return Err(Error::Value(
+                        format!("db file compact error on Unknown os, from {:?} to {:?}, cause:{}.",
+                                &new_log.path.to_str(),
+                                &self.log.path.to_str(), err.to_string())
+                    ))
+                }
+            };
+        };
+
         new_log.path = self.log.path.clone();
 
         self.log = new_log;
