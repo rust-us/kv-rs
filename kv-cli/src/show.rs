@@ -1,6 +1,6 @@
 use tokio::time::Instant;
 
-//! Show affected Info
+/// Show affected Info
 pub struct Show {
     is_show_affected: bool,
     is_repl: bool,

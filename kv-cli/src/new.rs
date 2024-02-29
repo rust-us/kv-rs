@@ -2,7 +2,7 @@ use std::process::{Command, Stdio};
 use log::info;
 use anyhow::{bail, Result};
 
-//! Return a new Command object
+/// Return a new Command object
 pub fn new_command(program: &str) -> Command {
     // On Windows, initializes launching <program> as `cmd /c <program>`.
     // Initializing only with `Command::new("npm")` will launch

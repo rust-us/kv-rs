@@ -3,7 +3,7 @@ use anyhow::{bail, Error, Result};
 use console::style;
 use crate::emoji;
 
-//! Synchronized progress bar and status message printing.
+/// Synchronized progress bar and status message printing.
 pub struct ProgressOutput {
     quiet: AtomicBool,
     log_level: AtomicU8,

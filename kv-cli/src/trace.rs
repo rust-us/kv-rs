@@ -9,7 +9,7 @@ use tracing_appender::rolling::Rotation;
 
 const MAX_LOG_FILES: usize = 10;
 
-//! log info
+/// log info
 #[allow(dyn_drop)]
 pub async fn init_logging(
     dir: &str,

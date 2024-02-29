@@ -1,3 +1,5 @@
+//! The various kinds of commands that `command` can execute.
+
 mod login;
 
 use clap::Subcommand;
