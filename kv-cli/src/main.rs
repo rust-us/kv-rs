@@ -1,5 +1,41 @@
 #![allow(unused)]
 
+//! `kv-rs` CLI Tools.
+//!
+//! ## Getting started
+//!
+//! ```doc
+//! ❯ ./kvcli
+//!
+//! ██  ██  █        █
+//! ██ ██   ██      ██
+//! ███      ██    ██
+//! ██ ██     ██  ██
+//! ██  ██     ████  KV Storage CLI
+//!
+//! Welcome to kvcli.
+//! Connecting to Client.
+//!
+//!
+//! kvcli > SET order_key xxx
+//! OK ~
+//!
+//! kvcli > keys
+//! order_key
+//!
+//! kvcli > ksize
+//! 1
+//!
+//! kvcli > GET order_key
+//! xxx
+//!
+//! kvcli > DEL order_key
+//! OK ~
+//!
+//! kvcli > GET order_key
+//! N/A ~
+//! ```
+
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{self, BufWriter, IsTerminal, StderrLock, stdin, StdoutLock, Write};

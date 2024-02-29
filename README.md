@@ -39,7 +39,7 @@ kvcli >
 ██ ██     ██  ██
 ██  ██     ████  KV Storage CLI
 
-The various kinds of commands that `command` can execute
+A distributed kv storage CLI
 
 Usage: kvcli [OPTIONS] [COMMAND]
 
@@ -48,13 +48,14 @@ Commands:
   help   Print this message or the help of the given subcommand(s)
 
 Options:
-  -d, --debug                  debug model
-      --help                   Print help information
-  -q, --quiet <QUIET>          No output printed to stdout [possible values: true, false]
-  -l, --log-level <LOG_LEVEL>  [default: info]
-  -n, --non-interactive        Force non-interactive mode
-      --query=<QUERY>          Query to execute
-  -V, --version                Print version
+  -d, --debug                       debug model
+      --help                        Print help information
+      --storage_path <CONFIG_PATH>  load config path, default '${pwd}/config' [default: config]
+  -q, --quiet <QUIET>               No output printed to stdout [possible values: true, false]
+  -l, --log-level <LOG_LEVEL>       [default: info]
+  -n, --non-interactive             Force non-interactive mode
+      --query=<QUERY>               Query to execute
+  -V, --version                     Print version
 ```
 
 ### kvcli debug
@@ -110,14 +111,24 @@ kvcli >
 Welcome to kvcli.
 Connecting to Client.
 
-kvcli > SET ob xxx
-OK
+kvcli > SET order_key xxx
+OK ~
 
-> GET ob
-"xxx"
+kvcli > keys
+order_key
 
-> DEL ob
-(integer) 1
+kvcli > ksize
+1
+
+kvcli > GET order_key
+xxx
+
+kvcli > DEL order_key
+OK ~
+
+kvcli > GET order_key
+N/A ~
+
 ```
 
 ### Config
