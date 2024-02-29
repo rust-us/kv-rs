@@ -370,13 +370,13 @@ impl Session {
                     show.output(size);
                 }
 
-                let c_rs = self.engine.compact();
-                match c_rs {
-                    Ok(_) => {}
-                    Err(err) => {
-                        eprintln!("{:?}", err.to_string());
-                    }
-                }
+                // let c_rs = self.engine.compact();
+                // match c_rs {
+                //     Ok(_) => {}
+                //     Err(err) => {
+                //         eprintln!("{:?}", err.to_string());
+                //     }
+                // }
 
                 Ok(Some(ServerStats::default()))
             },
@@ -391,8 +391,6 @@ impl Session {
 
                     show.output(1);
                 }
-
-                self.engine.compact().expect("engine.compact");
 
                 Ok(Some(ServerStats::default()))
             },
