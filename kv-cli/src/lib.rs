@@ -1,6 +1,6 @@
 #![feature(const_trait_impl)]
 
-//! `kv-rs` CLI Tools.
+//! `kv-rs` CLI Tools. [Author fengyang]
 //!
 //! ## Getting started
 //!

@@ -11,7 +11,7 @@
 //! All live keys must fit in memory.
 //! Deletes write a tombstone value to the log file.
 //! To remove old garbage, logs can be compacted by writing new logs containing only live
-//! data, skipping replaced values and tombstones.
+//! data, skipping replaced values and tombstones. [Author fengyang]
 //!
 //! ## Getting started
 //!

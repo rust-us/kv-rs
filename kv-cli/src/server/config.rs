@@ -7,7 +7,7 @@ const DEFAULT_STORAGE_PATH: &str = "storage/kvdb";
 pub const DEFAULT_PROMPT: &str = "kvcli";
 pub const DEFAULT_DB_NAME: &str = "kvdb";
 
-/// load configration
+//! load configration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigLoad {
     version: u8,

@@ -21,6 +21,7 @@ use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
 use crate::show::Show;
 
+//! Session and kv storage cmd and running
 pub struct Session {
     is_repl: bool,
 

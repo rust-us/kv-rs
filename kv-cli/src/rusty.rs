@@ -16,6 +16,7 @@ use rustyline::Result;
 use crate::ast::token_kind::TokenKind;
 use crate::ast::tokenizer::{all_reserved_keywords, tokenize_sql};
 
+//! CliHelper
 pub struct CliHelper {
     completer: FilenameCompleter,
     keywords: Arc<Vec<String>>,
