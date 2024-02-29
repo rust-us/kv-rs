@@ -4,6 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::mvcc::Version;
 use crate::storage::engine::Engine;
 
+/// mvcc
 pub struct MVCC<E: Engine> {
     engine: Arc<Mutex<E>>,
 }
