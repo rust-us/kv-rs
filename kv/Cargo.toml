@@ -1,7 +1,6 @@
 [package]
-name = "kv"
-keywords = ["kv"]
-#categories = ["algorithms", "no-std"]
+name = "kv_rs"
+keywords = ["kv", "kv_rs"]
 version = { workspace = true }
 description = "A distributed kv storage core"
 authors = { workspace = true }
