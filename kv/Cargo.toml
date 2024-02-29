@@ -3,10 +3,11 @@ name = "kv"
 keywords = ["kv"]
 #categories = ["algorithms", "no-std"]
 version = { workspace = true }
+description = "A distributed kv storage core"
 authors = { workspace = true }
+edition = { workspace = true }
 license = { workspace = true }
 publish = { workspace = true }
-edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

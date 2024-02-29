@@ -3,10 +3,11 @@ name = "kvcli"
 keywords = ["kv", "cli"]
 categories = ["command-line-utilities"]
 version = { workspace = true }
+description = "A distributed kv storage CLI"
 authors = { workspace = true }
+edition = { workspace = true }
 license = { workspace = true }
 publish = { workspace = true }
-edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
