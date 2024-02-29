@@ -13,11 +13,12 @@ publish = { workspace = true }
 
 [[bin]]
 name = "kvcli"
-path = "src/main.rs"
 doctest = false
 test = false
 
 [dependencies]
+kv-rs = { workspace = true }
+
 structopt = { workspace = true }
 clap = { workspace = true }
 indicatif = { workspace = true }
@@ -44,9 +45,6 @@ console = "0.15.5"
 signal-hook = {version = "0.3.17"}
 human-panic = "1.2.3"
 rustyline = "12.0"
-
-
-kv-rs = { path = "../kv" }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
