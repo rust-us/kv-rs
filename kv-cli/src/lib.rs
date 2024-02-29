@@ -1,5 +1,41 @@
 #![feature(const_trait_impl)]
 
+//! `kv-rs` CLI Tools.
+//!
+//! ## Getting started
+//!
+//! ```doc
+//! ❯ ./kvcli
+//!
+//! ██  ██  █        █
+//! ██ ██   ██      ██
+//! ███      ██    ██
+//! ██ ██     ██  ██
+//! ██  ██     ████  KV Storage CLI
+//!
+//! Welcome to kvcli.
+//! Connecting to Client.
+//!
+//!
+//! kvcli > SET order_key xxx
+//! OK ~
+//!
+//! kvcli > keys
+//! order_key
+//!
+//! kvcli > ksize
+//! 1
+//!
+//! kvcli > GET order_key
+//! xxx
+//!
+//! kvcli > DEL order_key
+//! OK ~
+//!
+//! kvcli > GET order_key
+//! N/A ~
+//! ```
+
 pub mod progressbar;
 pub mod emoji;
 pub mod command;
