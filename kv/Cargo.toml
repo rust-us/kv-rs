@@ -1,5 +1,5 @@
 [package]
-name = "kv_rs"
+name = "kv-rs"
 keywords = ["kv", "kv_rs"]
 version = { workspace = true }
 description = "A distributed kv storage core"
