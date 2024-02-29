@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 description = "A distributed kv storage"
 authors = ["fengyang <yueny09@163.com>"]
 edition = "2021"
@@ -21,7 +21,7 @@ autobenches = true
 include = ["src/", "LICENSE-*", "README.md", "README.en.md", "CHANGELOG.md", "COPYRIGHT"]
 
 [workspace.dependencies]
-kv-rs = { path = "kv", version = "0.0.3" }
+kv-rs = { path = "kv", version = "0.0.4" }
 
 #错误处理
 anyhow = "1.0.63"
