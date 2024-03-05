@@ -1,7 +1,0 @@
-version = 1
-api_key = "abcd"
-# storage_path = "/media/fengyang/App-1T/workspace/kv/storage"
-
-# [cli]
-# show_affected = false
-# show_progress = false

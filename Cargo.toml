@@ -33,7 +33,7 @@ chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
 # CLI 命令行解析
 clap = { version = "~4.4.2", features = ["cargo", "derive", "env"] }
 # config 配置加载
-confy = {version = "0.6.0"}
+config = "0.14.0"
 #终端多彩显示
 colored = "2.0.0"
 # 显示进度条

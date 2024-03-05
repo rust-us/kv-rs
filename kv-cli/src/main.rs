@@ -29,34 +29,26 @@ pub struct Args {
     #[clap(long, help = "Print help information")]
     help: bool,
 
-    #[clap(long = "storage_path", default_value = "config")]
-    /// load config path, default '${pwd}/config'
-    config_path: Option<PathBuf>,
+    /// Configuration file path, default 'config/kvdb.yaml'
+    #[clap(short = 'c', long = "config", help = "Configuration file path", default_value = "config/kvdb.yaml")]
+    config: String,
 
     /// The subcommand to run.
     #[clap(subcommand)] // Note that we mark a field as a subcommand
     cmd: Option<command::Command>,
 
-    #[clap(long = "quiet", short = 'q')]
-    /// No output printed to stdout
-    quiet: Option<bool>,
+    /// quiet model, No output printed to stdout
+    #[clap(long = "quiet", short = 'q', default_value = "false")]
+    quiet: bool,
 
-    #[clap(short = 'l', default_value = "info", long)]
+    #[clap(short = 'l', long, default_value = "info")]
     log_level: String,
 
-    #[clap(short = 'n', long, help = "Force non-interactive mode")]
+    #[clap(short = 'n', long, help = "Force non-interactive mode", default_value = "false")]
     non_interactive: bool,
 
     #[clap(long, require_equals = true, help = "Query to execute")]
     query: Option<String>,
-}
-
-impl Args {
-    pub fn fix_settings(&mut self) {
-        if self.config_path.is_none() {
-            self.config_path = Some("config".parse().unwrap());
-        }
-    }
 }
 
 /// CMD like:
@@ -79,7 +71,6 @@ pub async fn main() -> Result<()> {
     if args.debug {
         println!("{:?}", args);
     }
-    args.fix_settings();
     info!("kvcli start args: {:?}", &args);
 
     let log_dir = format!(
@@ -88,8 +79,7 @@ pub async fn main() -> Result<()> {
     );
     let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
 
-    let mut cfg: ConfigLoad = confy::load_path(args.config_path.as_ref().unwrap())?;
-    cfg.fix_settings();
+    let mut cfg = ConfigLoad::new(args.config.as_ref())?;
     if args.debug {
         println!("{:?}", &cfg);
         eprintln!();
@@ -109,7 +99,7 @@ pub async fn main() -> Result<()> {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    if args.quiet.is_some() {
+    if args.quiet {
         PBAR.set_quiet(true);
     }
     let is_terminal = stdin().is_terminal();

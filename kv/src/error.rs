@@ -3,12 +3,13 @@ use std::fmt::Display;
 use serde_derive::{Deserialize, Serialize};
 
 /// Result returning Error
-pub type CResult<T> = Result<T, Error>;
+pub type CResult<T> = std::result::Result<T, Error>;
 
 /// errors. All except Internal are considered user-facing.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Error {
     Abort,
+    Config(String),
     Internal(String),
     Parse(String),
     ReadOnly,
@@ -21,7 +22,7 @@ impl std::error::Error for Error {}
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         match self {
-            Error::Internal(s) | Error::Parse(s) | Error::Value(s) => {
+            Error::Config(s) | Error::Internal(s) | Error::Parse(s) | Error::Value(s) => {
                 write!(f, "{}", s)
             }
             Error::Abort => write!(f, "Operation aborted"),
@@ -40,6 +41,12 @@ impl serde::ser::Error for Error {
 impl serde::de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
         Error::Internal(msg.to_string())
+    }
+}
+
+impl From<config::ConfigError> for Error {
+    fn from(err: config::ConfigError) -> Self {
+        Error::Config(err.to_string())
     }
 }
 

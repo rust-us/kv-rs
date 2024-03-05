@@ -2,20 +2,24 @@ use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use anyhow::anyhow;
 use serde_derive::{Serialize, Deserialize};
+use kv_rs::error::CResult;
 
-const DEFAULT_STORAGE_PATH: &str = "storage/kvdb";
+const DEFAULT_STORAGE_PATH: &str = "storage";
+const DEFAULT_DB: &str = "kvdb";
 pub const DEFAULT_PROMPT: &str = "kvcli";
 pub const DEFAULT_DB_NAME: &str = "kvdb";
+pub const AUTO_APPEND_PART_CMD_SYMBOL: char = ';';
 
 /// load configration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct ConfigLoad {
     version: u8,
 
     api_key: String,
 
     /// load config path, default '${pwd}/config'
-    storage_path: Option<PathBuf>,
+    data_dir: String,
+    compact_threshold: f32,
 
     /// prompt
     pub prompt: Option<String>,
@@ -25,8 +29,6 @@ pub struct ConfigLoad {
 
     /// fix part cmd options. default false
     auto_append_part_cmd: Option<bool>,
-    /// Division symbol
-    auto_append_part_cmd_symbol: Option<char>,
 
     /// Multi line mode, default is true.
     pub multi_line: Option<bool>,
@@ -34,13 +36,7 @@ pub struct ConfigLoad {
     /// whether replace '\n' with '\\n', default true.
     pub replace_newline: Option<bool>,
 
-    cli: Option<CliConfig>,
-
-}
-
-/// load configration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct CliConfig {
+    /// cli
     /// Show rows affected
     show_affected: Option<bool>,
 
@@ -50,50 +46,53 @@ struct CliConfig {
     /// Show progress [bar] when executing queries.
     pub show_progress: Option<bool>,
 
-    // 输出格式化
-
 }
 
 impl Default for ConfigLoad {
     fn default() -> Self {
         ConfigLoad {
-            version: 0,
+            version: 1,
             api_key: "".to_string(),
-            storage_path: None,
+            data_dir: "data".to_owned(),
+            compact_threshold: 0.2,
             prompt: Some(DEFAULT_PROMPT.to_string()),
             show_stats: Some(false),
             auto_append_part_cmd: Some(false),
-            auto_append_part_cmd_symbol: Some(';'),
             multi_line: Some(true),
             replace_newline: Some(true),
-            cli: Some(CliConfig::default()),
+            show_affected: Some(false),
+            progress_color: None,
+            show_progress: Some(false),
         }
     }
 }
 
 impl ConfigLoad {
-    pub fn is_show_affected(&self) -> bool {
-        match self.cli.as_ref() {
-            None => {
-                false
-            }
-            Some(c) => {
-                if c.is_show_affected().is_none() {
-                    false
-                } else {
-                    c.is_show_affected().unwrap().clone()
-                }
-            }
-        }
+    pub fn new(file: &str) -> CResult<Self> {
+        let df = ConfigLoad::default();
+
+        Ok(config::Config::builder()
+            .set_default("version", df.version)?
+            .set_default("api_key", df.api_key)?
+            .set_default("data_dir", df.data_dir)?
+            .set_default("compact_threshold", 0.2)?
+            .set_default("prompt", df.prompt)?
+            .set_default("show_stats", df.show_stats)?
+            .set_default("auto_append_part_cmd", df.auto_append_part_cmd)?
+            .set_default("multi_line", df.multi_line)?
+            .set_default("replace_newline", df.replace_newline)?
+            .set_default("show_affected", df.show_affected)?
+            .set_default("progress_color", df.progress_color)?
+            .set_default("show_progress", df.show_progress)?
+            .add_source(config::File::with_name(file))
+            .add_source(config::Environment::with_prefix("KVDB"))
+            .build()?
+            .try_deserialize()?)
     }
 
     /// load config path
-    pub fn get_storage_path(&self) -> PathBuf {
-        if self.storage_path.is_none() {
-            PathBuf::from(DEFAULT_STORAGE_PATH)
-        } else {
-            self.storage_path.as_ref().unwrap().clone()
-        }
+    pub fn get_data_dir(&self) -> PathBuf {
+        std::path::Path::new(&self.data_dir).join(DEFAULT_DB)
     }
 
     /// fix part cmd options. default false
@@ -107,12 +106,7 @@ impl ConfigLoad {
 
     /// Division symbol
     pub fn get_auto_append_part_cmd_symbol(&self) -> char {
-        if self.auto_append_part_cmd_symbol.is_none() {
-            // SemiColon ==>  ;
-            ';'
-        } else {
-            self.auto_append_part_cmd_symbol.as_ref().unwrap().clone()
-        }
+        AUTO_APPEND_PART_CMD_SYMBOL
     }
 
     /// change cmd:
@@ -128,7 +122,6 @@ impl ConfigLoad {
             },
             "show_stats" => self.show_stats = Some(cmd_value.parse()?),
             "auto_append_part_cmd" => self.auto_append_part_cmd = Some(cmd_value.parse()?),
-            "auto_append_part_cmd_symbol" => self.auto_append_part_cmd_symbol = Some(cmd_value.parse()?),
             "multi_line" => self.multi_line = Some(cmd_value.parse()?),
             "replace_newline" => self.replace_newline = Some(cmd_value.parse()?),
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
@@ -142,62 +135,22 @@ impl ConfigLoad {
         self.show_stats = Some(true);
     }
 
-    pub fn fix_settings(&mut self) {
-        if self.storage_path.is_none() {
-            self.storage_path = Some(PathBuf::from(DEFAULT_STORAGE_PATH));
-        } else {
-            let config_path = self.storage_path.as_ref().unwrap().join(DEFAULT_DB_NAME);
-            self.storage_path = Some(config_path);
-        }
+    fn set_show_progress(&mut self, v: bool) {
+        self.show_progress = Some(v)
     }
 
-    fn set_show_progress(&mut self, v: bool) {
-        match self.cli.as_mut() {
+    pub fn is_show_affected(&self) -> bool {
+        match self.show_affected {
             None => {
-                let mut cli = CliConfig::default();
-                cli.set_show_progress(v);
-                self.cli = Some(cli);
+                false
             }
-            Some(c) => {
-                c.set_show_progress(v);
+            Some(r) => {
+                r
             }
         }
     }
 
     fn set_show_affected(&mut self, v: bool) {
-        match self.cli.as_mut() {
-            None => {
-                let mut cli = CliConfig::default();
-                cli.set_show_affected(v);
-                self.cli = Some(cli);
-            }
-            Some(c) => {
-                c.set_show_affected(v);
-            }
-        }
-    }
-}
-
-impl Default for CliConfig {
-    fn default() -> Self {
-        CliConfig {
-            show_affected: Some(false),
-            progress_color: None,
-            show_progress: Some(false),
-        }
-    }
-}
-
-impl CliConfig {
-    pub fn is_show_affected(&self) -> Option<&bool> {
-        self.show_affected.as_ref()
-    }
-
-    pub fn set_show_affected(&mut self, show_affected: bool) {
-        self.show_affected = Some(show_affected);
-    }
-
-    pub fn set_show_progress(&mut self, show_progress: bool) {
-        self.show_progress = Some(show_progress);
+        self.show_affected= Some(v)
     }
 }

@@ -43,7 +43,8 @@ impl Session {
             println!();
         }
 
-        let engine = LogCask::new(settings.get_storage_path().clone())?;
+        // let engine = LogCask::new(settings.get_storage_path().clone())?;
+        let engine = LogCask::new_compact(settings.get_data_dir().clone(), 0.2)?;
 
         let mut keywords = Vec::with_capacity(1024);
 

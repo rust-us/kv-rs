@@ -6,6 +6,14 @@ KV Storage in Rust
 
 [kv-cli](./kv-cli): KV CLI
 
+## Platforms
+
+Our current goal is that the following platforms will be able to run kv db.
+
+* Linux x86 (`x86_64-unknown-linux-gnu`)
+* Darwin x86 (`x86_64-apple-darwin`)
+* Darwin arm (`aarch64-apple-darwin`)
+
 
 ## Installation for
 ### Cargo
@@ -140,6 +148,5 @@ N/A ~
 | .show_stats 【true, false】 | Show stats after executing queries.  Only works with non-interactive mode.  |
 | .show_affected 【true, false】 | Show rows affected |
 | .auto_append_part_cmd 【true, false】 | fix part cmd options. default false  |
-| .auto_append_part_cmd_symbol 【true, false】 | Division symbol  |
 | .multi_line 【true, false】 | Multi line mode, default is true. |
 | .replace_newline 【true, false】 | whether replace '\n' with '\\n', default true. |
