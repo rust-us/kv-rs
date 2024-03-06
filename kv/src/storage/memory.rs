@@ -2,14 +2,15 @@ use crate::error::CResult;
 use crate::storage::engine::Engine;
 use crate::storage::{ScanIteratorT, Status};
 
-/// An in-memory key/value storage engine using the Rust standard library B-tree
-/// implementation. Data is not persisted.
+/// The pure memory storage engine uses BTreeMap,
+/// which stores the key and value directly in the memory,
+/// and will not persist the data.
 pub struct Memory {
     data: std::collections::BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
 impl Memory {
-    /// Creates a new Memory key-value storage engine.
+    /// Creates Memory key-value storage engine.
     pub fn new() -> Self {
         Self { data: std::collections::BTreeMap::new() }
     }
@@ -26,6 +27,7 @@ impl Engine for Memory {
 
     fn delete(&mut self, key: &[u8]) -> CResult<i64> {
         self.data.remove(key);
+
         Ok(1)
     }
 

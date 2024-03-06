@@ -54,7 +54,11 @@ impl LogCask {
     }
 
     /// Opens a LogCask, and automatically compacts it if the amount of garbage exceeds the given ratio when opened.
-    /// Suitable for small-scale data sets。 And, Compact operation will only be performed when the database is started, and this process will lock the log file.
+    /// Suitable for small-scale data sets。
+    /// And, Compact operation will only be performed when the kvdb is started,
+    /// and this process will lock the log file.
+    ///
+    /// In there, the current garbage_ratio will be calculated, and if it exceeds the threshold, it will be compacted.
     pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> CResult<Self> {
         let mut s = Self::new(path)?;
 
@@ -69,6 +73,7 @@ impl LogCask {
                 status.total_disk_size / 1024 / 1024
             );
             s.compact()?;
+
             log::info!(
                 "Compacted {} to size {:.3}MB",
                 s.log.path.display(),
@@ -151,7 +156,7 @@ impl Engine for LogCask {
 }
 
 impl LogCask {
-    /// Create a new file, call write_log to rebuild the log file and save it.
+    /// Create a new file, call `write_log` to rebuild the log file and save it.
     /// Compacts the current log file by writing out a new log file containing only live keys and replacing the current file with it.
     pub fn compact(&mut self) -> CResult<()> {
         let mut tmp_path = self.log.path.clone();
@@ -235,12 +240,17 @@ impl Drop for LogCask {
     }
 }
 
+/// Used for range reading.
 pub struct LogScanIterator<'a> {
     inner: std::collections::btree_map::Range<'a, Vec<u8>, (u64, u32)>,
     log: &'a mut Log,
 }
 
 impl<'a> LogScanIterator<'a> {
+    /// A map function is defined, and self.log.read_value () is called to read from the disk,
+    /// which is used to convert key and offset in BTreeMap into real kv.
+    ///
+    /// Since both inner and log are reference types, the life cycle is marked.
     fn map(&mut self, item: (&Vec<u8>, &(u64, u32))) -> <Self as Iterator>::Item {
         let (key, (value_pos, value_len)) = item;
         Ok((key.clone(), self.log.read_value(*value_pos, *value_len)?))

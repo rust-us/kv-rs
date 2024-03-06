@@ -9,19 +9,24 @@ use crate::error::CResult;
 /// Maps keys to a value position and length in the log file. It is convenient for sequential traversal and compaction.
 pub type KeyDir = std::collections::BTreeMap<Vec<u8>, (u64, u32)>;
 
-/// Engine status.
+/// Indicates the status of the current storage engine.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     /// The name of the storage engine.
     pub name: String,
+
     /// The number of live keys in the engine.
     pub keys: u64,
+
     /// The logical size of live key/value pairs.
     pub size: u64,
+
     /// The on-disk size of all data, live and garbage.
     pub total_disk_size: u64,
+
     /// The on-disk size of live data.
     pub live_disk_size: u64,
+    
     /// The on-disk size of garbage data.
     pub garbage_disk_size: u64,
 }
