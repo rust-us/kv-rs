@@ -1,13 +1,11 @@
 use crate::error::CResult;
 use crate::storage::{ScanIteratorT, Status};
 
-/// A key/value storage engine, where both keys and values are arbitrary byte
-/// strings between 0 B and 2 GB, stored in lexicographical key order. Writes
-/// are only guaranteed durable after calling flush().
+/// A key/value storage engine, where both keys and values are arbitrary byte strings between 0 B and 2 GB, stored in lexicographical key order.
+/// Writes are only guaranteed durable after calling flush().
 ///
-/// Only supports single-threaded use since all methods (including reads) take a
-/// mutable reference -- serialized access can't be avoided anyway,
-/// since both Raft execution and file access is serial.
+/// Only supports single-threaded use since all methods (including reads) take a mutable reference -- serialized access can't be avoided anyway,
+/// since both 'Raft' execution and file access is serial.
 pub trait Engine: std::fmt::Display + Send + Sync {
     /// The iterator returned by scan().
     type ScanIterator<'a>: ScanIteratorT + 'a

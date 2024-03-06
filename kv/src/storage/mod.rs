@@ -6,7 +6,7 @@ pub mod memory;
 use serde_derive::{Deserialize, Serialize};
 use crate::error::CResult;
 
-/// Maps keys to a value position and length in the log file.
+/// Maps keys to a value position and length in the log file. It is convenient for sequential traversal and compaction.
 pub type KeyDir = std::collections::BTreeMap<Vec<u8>, (u64, u32)>;
 
 /// Engine status.

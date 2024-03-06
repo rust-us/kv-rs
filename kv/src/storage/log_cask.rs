@@ -47,12 +47,14 @@ impl LogCask {
 
     pub fn new_with_lock(path: PathBuf, try_lock: bool) -> CResult<Self> {
         let mut log = Log::new_with_lock(path, try_lock)?;
+
         let keydir = log.build_keydir()?;
+
         Ok(Self { log, keydir })
     }
 
-    /// Opens a LogCask, and automatically compacts it if the amount
-    /// of garbage exceeds the given ratio when opened.
+    /// Opens a LogCask, and automatically compacts it if the amount of garbage exceeds the given ratio when opened.
+    /// Suitable for small-scale data sets。 And, Compact operation will only be performed when the database is started, and this process will lock the log file.
     pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> CResult<Self> {
         let mut s = Self::new(path)?;
 
@@ -149,8 +151,8 @@ impl Engine for LogCask {
 }
 
 impl LogCask {
-    /// Compacts the current log file by writing out a new log file containing
-    /// only live keys and replacing the current file with it.
+    /// Create a new file, call write_log to rebuild the log file and save it.
+    /// Compacts the current log file by writing out a new log file containing only live keys and replacing the current file with it.
     pub fn compact(&mut self) -> CResult<()> {
         let mut tmp_path = self.log.path.clone();
         // need double disk size
@@ -208,8 +210,9 @@ impl LogCask {
         Ok(())
     }
 
-    /// Writes out a new log file with the live entries of the current log file
-    /// and returns it along with its keydir. Entries are written in key order.
+    /// Traverse the current map, read from the original log file, write into the new log file, and build a new map.
+    ///
+    /// in other words, writes out a new log file with the live entries of the current log file and returns it along with its keydir. Entries are written in key order.
     fn write_log(&mut self, path: PathBuf) -> CResult<(Log, KeyDir)> {
         let mut new_keydir = KeyDir::new();
         let mut new_log = Log::new(path)?;
