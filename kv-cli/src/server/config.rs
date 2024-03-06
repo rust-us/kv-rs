@@ -17,11 +17,12 @@ pub struct ConfigLoad {
 
     api_key: String,
 
-    /// load config path, default '${pwd}/config'
+    /// load config path, default '${pwd}/data'
     data_dir: String,
-    compact_threshold: f32,
+    /// compact_threshold, default '0.2
+    compact_threshold: f64,
 
-    /// prompt
+    /// prompt, default 'kvcli'
     pub prompt: Option<String>,
 
     /// Show stats after executing queries.  Only works with non-interactive mode.
@@ -93,6 +94,10 @@ impl ConfigLoad {
     /// load config path
     pub fn get_data_dir(&self) -> PathBuf {
         std::path::Path::new(&self.data_dir).join(DEFAULT_DB)
+    }
+
+    pub fn get_compact_threshold(&self) -> f64 {
+        self.compact_threshold
     }
 
     /// fix part cmd options. default false

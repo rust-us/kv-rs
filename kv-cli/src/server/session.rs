@@ -21,6 +21,10 @@ use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
 use crate::show::Show;
 
+pub const SET_RESP_STR: &str = "OK";
+pub const GET_RESP_NOT_FOUND_STR: &str = "N/A";
+pub const SET_RESP_BYE_STR: &str = "Bye~";
+
 /// Session and kv storage cmd and running
 pub struct Session {
     is_repl: bool,
@@ -43,8 +47,7 @@ impl Session {
             println!();
         }
 
-        // let engine = LogCask::new(settings.get_storage_path().clone())?;
-        let engine = LogCask::new_compact(settings.get_data_dir().clone(), 0.2)?;
+        let engine = LogCask::new_compact(settings.get_data_dir().clone(), settings.get_compact_threshold())?;
 
         let mut keywords = Vec::with_capacity(1024);
 
@@ -124,7 +127,7 @@ impl Session {
             }
         }
 
-        println!("Bye~");
+        println!("{}", SET_RESP_BYE_STR);
         let _ = rl.save_history(&get_history_path());
     }
 
@@ -280,7 +283,7 @@ impl Session {
 
             self.settings.inject_cmd(query[0], query[1])?;
             info!("refresh config: {:?}", &self.settings);
-            eprintln!("Refresh Config OK ~");
+            eprintln!("Refresh Config OK");
 
             return Ok(Some(ServerStats::default()));
         }
@@ -428,7 +431,7 @@ impl Session {
                 let rs = self.engine.set(key.as_bytes(), value.as_bytes().to_vec());
                 match rs {
                     Ok(_) => {
-                        eprintln!("OK ~");
+                        eprintln!("{}", SET_RESP_STR);
                     }
                     Err(err) => {
                         eprintln!("{}", err.to_string());
@@ -450,7 +453,7 @@ impl Session {
                 match rs {
                     Ok(v) => {
                         if v.is_none() {
-                            eprintln!("N/A ~");
+                            eprintln!("{}", GET_RESP_NOT_FOUND_STR);
                         } else {
                             let val = v.unwrap();
                             eprintln!("{}", String::from_utf8(val).expect("Get engine#get error"));
@@ -475,15 +478,17 @@ impl Session {
 
                 let key = &token_list[1].get_slice();
                 let rs = self.engine.delete(key.as_bytes());
+                let mut effect_size = 0;
                 match rs {
-                    Ok(_) => {
-                        eprintln!("OK ~");
+                    Ok(effect) => {
+                        effect_size = effect;
+                        eprintln!("effect {}", effect);
                     }
                     Err(err) => {
                         eprintln!("{}", err.to_string());
                     }
                 };
-                show.output(1);
+                show.output(effect_size);
 
                 Ok(Some(ServerStats::default()))
             }

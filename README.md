@@ -56,14 +56,14 @@ Commands:
   help   Print this message or the help of the given subcommand(s)
 
 Options:
-  -d, --debug                       debug model
-      --help                        Print help information
-      --storage_path <CONFIG_PATH>  load config path, default '${pwd}/config' [default: config]
-  -q, --quiet <QUIET>               No output printed to stdout [possible values: true, false]
-  -l, --log-level <LOG_LEVEL>       [default: info]
-  -n, --non-interactive             Force non-interactive mode
-      --query=<QUERY>               Query to execute
-  -V, --version                     Print version
+  -d, --debug                  debug model
+      --help                   Print help information
+  -c, --config <CONFIG>        Configuration file path [default: config/kvdb.yaml]
+  -q, --quiet                  quiet model, No output printed to stdout
+  -l, --log-level <LOG_LEVEL>  [default: info]
+  -n, --non-interactive        Force non-interactive mode
+      --query=<QUERY>          Query to execute
+  -V, --version                Print version
 ```
 
 ### kvcli debug
@@ -78,8 +78,8 @@ Options:
 ██ ██     ██  ██
 ██  ██     ████  KV Storage CLI
 
-Args { debug: true, help: false, cmd: None, quiet: None, log_level: "info", non_interactive: false, query: None }
-ConfigLoad { version: 1, api_key: "abcd123456", show_progress: "false", show_stats: "false", multi_line: "false", replace_newline: "false" }
+Args { debug: true, help: false, config: "config/kvdb.yaml", cmd: None, quiet: false, log_level: "info", non_interactive: false, query: None }
+ConfigLoad { version: 1, api_key: "abcd", data_dir: "/media/fengyang/App-1T/workspace/kv/storage", compact_threshold: 0.2, prompt: Some("kvcli"), show_stats: Some(false), auto_append_part_cmd: Some(false), multi_line: Some(true), replace_newline: Some(true), show_affected: Some(false), progress_color: None, show_progress: Some(false) }
 
 Welcome to kvcli.
 Connecting to Client.
@@ -120,7 +120,7 @@ Welcome to kvcli.
 Connecting to Client.
 
 kvcli > SET order_key xxx
-OK ~
+OK
 
 kvcli > keys
 order_key
@@ -132,10 +132,10 @@ kvcli > GET order_key
 xxx
 
 kvcli > DEL order_key
-OK ~
+OK
 
 kvcli > GET order_key
-N/A ~
+N/A
 
 ```
 

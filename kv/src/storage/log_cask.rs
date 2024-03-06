@@ -91,10 +91,10 @@ impl std::fmt::Display for LogCask {
 impl Engine for LogCask {
     type ScanIterator<'a> = LogScanIterator<'a>;
 
-    fn delete(&mut self, key: &[u8]) -> CResult<()> {
+    fn delete(&mut self, key: &[u8]) -> CResult<i64> {
         self.log.write_entry(key, None)?;
         self.keydir.remove(key);
-        Ok(())
+        Ok(1)
     }
 
     fn flush(&mut self) -> CResult<()> {

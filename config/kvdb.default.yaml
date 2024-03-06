@@ -5,7 +5,7 @@ api_key : "abcd"
 
 # data directory, and the garbage ratio threshold at which to trigger kvd b compaction when opening the kvdb (only LogCask).
 # default "data"
-data_dir : "storage"
+data_dir : "/media/fengyang/App-1T/workspace/kv/storage"
 # default 0.2
 compact_threshold: 0.2
 

@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use human_panic::setup_panic;
 use log::info;
+use kv_rs::error::CResult;
 use kvcli::{command, PBAR, trace};
 use kvcli::command::{Command, run_pack};
 use kvcli::server::config::{ConfigLoad};
@@ -71,26 +72,33 @@ pub async fn main() -> Result<()> {
     if args.debug {
         println!("{:?}", args);
     }
-    info!("kvcli start args: {:?}", &args);
 
     let log_dir = format!(
         "{}/.kvcli",
         std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
     );
     let _guards = trace::init_logging(&log_dir, &args.log_level).await?;
-
-    let mut cfg = ConfigLoad::new(args.config.as_ref())?;
-    if args.debug {
-        println!("{:?}", &cfg);
-        eprintln!();
-    }
-    info!("kvcli start config: {:?}", &cfg);
+    info!("kvcli start args: {:?}", &args);
 
     let mut cmd = Args::command();
     if args.help {
         cmd.print_help()?;
         return Ok(());
     }
+
+    let mut cfg = match ConfigLoad::new(args.config.as_ref()) {
+        Ok(c) => {
+            c
+        }
+        Err(err) => {
+            ConfigLoad::default()
+        }
+    };
+    if args.debug {
+        println!("{:?}", &cfg);
+        eprintln!();
+    }
+    info!("kvcli start config: {:?}", &cfg);
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();

@@ -15,7 +15,7 @@ pub trait Engine: std::fmt::Display + Send + Sync {
             Self: Sized + 'a; // omit in trait objects, for object safety
 
     /// Deletes a key, or does nothing if it does not exist.
-    fn delete(&mut self, key: &[u8]) -> CResult<()>;
+    fn delete(&mut self, key: &[u8]) -> CResult<i64>;
 
     /// Flushes any buffered data to the underlying storage medium.
     fn flush(&mut self) -> CResult<()>;

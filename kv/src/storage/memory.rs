@@ -24,9 +24,9 @@ impl std::fmt::Display for Memory {
 impl Engine for Memory {
     type ScanIterator<'a> = MemoryScanIterator<'a>;
 
-    fn delete(&mut self, key: &[u8]) -> CResult<()> {
+    fn delete(&mut self, key: &[u8]) -> CResult<i64> {
         self.data.remove(key);
-        Ok(())
+        Ok(1)
     }
 
     fn flush(&mut self) -> CResult<()> {
