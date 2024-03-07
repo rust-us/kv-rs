@@ -10,7 +10,7 @@ use crate::mvcc::Version;
 use crate::storage::engine::Engine;
 use crate::storage::{ScanIteratorT, Status};
 
-/// An MVCC transaction.
+/// 事务最基础的结构体
 pub struct Transaction<E: Engine> {
     /// The underlying engine, shared by all transactions.
     engine: Arc<Mutex<E>>,
@@ -19,67 +19,62 @@ pub struct Transaction<E: Engine> {
     st: TransactionState,
 }
 
-/// A Transaction's state, which determines its write version and isolation.
-/// It is separate from Transaction to allow it to be passed around independently of the engine.
-/// There are two main motivations for this:
+/// 表示事务的状态。 事务状态的设计使得事务可以在不同的组件之间安全地传递，并且可以在不直接引用事务本身的情况下被引用，有助于简化事务管理。
 ///
-/// - It can be exported via Transaction.state(), (de)serialized,
-///   and later used to instantiate a new functionally equivalent Transaction via Transaction::resume().
-///   This allows passing the transaction between the storage engine across the machine boundary (To support distributed capabilities in the future.).
+/// 事务的状态，它决定了事务的写版本和隔离级别。 它与事务分开，允许它独立于引擎传递。
 ///
-/// - It can be borrowed independently of Engine, allowing references to it in VisibleIterator,
-///   which would otherwise result in self-references.
+/// 这样做有两个主要动机：
+///
+/// - 它可以通过 `Transaction.state()` 导出，(de)serialized(（反）序列化)，然后通过 Transaction::resume() 实例化一个新的功能等价的 Transaction。
+///   这允许跨机器边界在存储引擎之间传递事务（以支持未来的分布式功能）。
+///
+/// - 它可以独立于 Engine 借用，允许在 VisibleIterator 中引用它，否则会导致自引用。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TransactionState {
-    /// The version this transaction is running at.
-    /// Only one read-write transaction can run at a given version, since this identifies its writes.
+    /// 此事务正在运行的版本。 在给定的版本中只能运行一个读写事务，因为这会标识其写入。
     pub version: Version,
 
     /// If true, the transaction is read only.
     pub read_only: bool,
 
-    /// The set of concurrent active (uncommitted) transactions, as of the start of this transaction.
-    /// Their writes should be invisible to this transaction even if they're writing at a lower version,
-    /// since they're not committed yet.
+    /// 截至此事务开始时，并发活动（未提交）事务的集合。 即使他们正在写入较低版本，他们的写入也应对于此事务不可见，因为他们尚未提交。
     pub active: HashSet<Version>,
 }
 
 pub trait TransactionStateDef {
-    /// Checks whether the given version is visible to this transaction.
+    /// 判断给定的version对于当前事务是否可见。
     ///
-    /// Future versions, and versions belonging to active transactions as of the start of this transaction, are never isible.
+    /// 未来版本以及从本次交易开始时属于有效交易的版本永远不可见。
     ///
-    /// Read-write transactions see their own writes at their version.
+    /// 读写事务在它们的版本中看到自己的写入。
     ///
-    /// Read-only queries only see versions below the transaction's version, excluding the version itself.
-    /// This is to ensure time-travel queries see a consistent version both before and after any active transaction at that version commits its writes.
+    /// 只读查询只能看到事务版本以下的版本，不包括版本本身。
+    /// 这是为了确保 time-travel 查询在该版本提交写入之前和之后都能看到一致的版本。
     fn is_visible(&self, version: Version) -> bool;
 }
 
 impl TransactionStateDef for TransactionState {
     fn is_visible(&self, version: Version) -> bool {
-        if self.active.get(&version).is_some() {
+        if self.active.get(&version).is_some() { // 如果version来自活跃事务，即处于active_set当中，那么代表为新写入的，不可见
             false
-        } else if self.read_only {
+        } else if self.read_only { // 如果为只读事务，那么能看到小于version的(之前事务创建的)
             version < self.version
-        } else {
+        } else { // 如果是普通事务，那么可以看到之前的和自身写入(<=)
             version <= self.version
         }
     }
 }
 
 pub trait TransactionDef<E: Engine> {
-    /// Begins a new transaction in ** read-write mode **.
-    /// This will allocate a new version that the transaction can write at,
-    /// add it to the active set, and record its ** active snapshot for time-travel ** queries.
+    /// 以读写模式开始新事务。 这将分配一个新版本，交易可以在其中写入， 将其添加到活动集，并记录其活动快照以进行时间旅行查询。
     fn begin(engine: Arc<Mutex<E>>) -> CResult<Transaction<E>>;
 
     /// Begins a new read-only transaction.
-    /// If version is given it will see the state as of the beginning of that version (ignoring writes at that version).
-    /// In other words, it sees the same state as the read-write transaction at that version saw when it began.
+    /// 如果给出了版本，它将看到该版本开始时的状态（忽略该版本中的写入）。
+    /// 换句话说，它看到的状态与该版本开始时的读写事务看到的状态相同。
     fn begin_read_only(engine: Arc<Mutex<E>>, as_of: Option<Version>) -> CResult<Transaction<E>>;
 
-    /// Fetches the set of currently active transactions.
+    /// 获取当前活动事务的集合。
     fn scan_active(session: &mut MutexGuard<E>) -> CResult<HashSet<Version>>;
 
     /// Returns the version the transaction is running at.
@@ -91,9 +86,7 @@ pub trait TransactionDef<E: Engine> {
     /// Returns the transaction's state. This can be used to instantiate a functionally equivalent transaction via resume().
     fn state(&self) -> &TransactionState;
 
-    /// Commits the transaction, by ** removing it from the active set ** .
-    /// This will immediately make its writes visible to subsequent transactions.
-    /// Also removes its TxnWrite records, which are no longer needed.
+    /// 通过将其从活动集中删除，提交事务。 这将立即使后续事务的写入可见。 同时删除不再需要的 TxnWrite 记录。
     fn commit(self) -> CResult<()>;
 
     /// Rolls back the transaction, by undoing all written versions and removing it from the active set.

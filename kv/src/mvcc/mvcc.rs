@@ -88,6 +88,11 @@ use crate::mvcc::Version;
 use crate::storage::engine::Engine;
 
 /// 基于MVCC的事务键值引擎，提供最基本的ACID和MVCC支持。它包装了一个用于键/值存储的基础存储引擎。
+/// MVCC所提供的隔离级别为快照隔离，事务只能看到数据库的一个一致性快照，而这个快照是根据事务创建的时间决定的，即事务只能够看到事务创建前的最新的数据，以及由自己写入的新数据。
+/// 目前还未提交的活跃事务之间相互隔离互不影响。
+///
+/// 会保存数据的所有版本，因此就可以支持time travel query，即传入一个时间戳，然后获取一个那时的快照，
+/// 进行只读请求(由于基于旧版本进行写请求会扰乱当前数据库的状态，如进行set x = x + 1，原本x = 3，但是目前已经是x = 5了，因此time travel只支持只读事务)
 pub struct MVCC<E: Engine> {
     engine: Arc<Mutex<E>>,
 }
@@ -209,13 +214,16 @@ impl<E: Engine> Clone for MVCC<E> {
     }
 }
 
-/// MVCC engine status.
+/// 表示当前事务的状态
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     /// The total number of MVCC versions (i.e.  read-write transactions).
     pub versions: u64,
+
     /// Number of currently active transactions.
     pub active_txns: u64,
+
     /// The storage engine.
+    /// storage是存储引擎的storage
     pub storage: super::super::storage::Status,
 }
