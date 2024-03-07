@@ -4,7 +4,7 @@ use fs4::FileExt;
 use crate::error::{CResult, Error};
 use crate::storage::KeyDir;
 
-/// A append-only log file, containing a sequence of key/value entries encoded as follows;
+/// 一个仅追加的日志文件，包含如下要素；
 ///
 /// - Key length as big-endian u32.
 /// - Value length as big-endian i32, or -1 for tombstones.
@@ -18,8 +18,8 @@ pub struct Log {
 }
 
 impl Log {
-    /// Opens a log file, or creates one if it does not exist.
-    /// Takes out an exclusive lock on the file until it is closed, or errors if the lock is already held.
+    /// 打开日志文件，如果不存在，则创建一个日志文件。
+    /// 持有文件的独占锁，直到文件关闭为止；如果锁已被持有，则会出错。
     pub fn new(path: PathBuf) -> CResult<Self> {
         Self::new_with_lock(path, true)
     }
@@ -49,16 +49,15 @@ impl Log {
         Ok(Self { path, file })
     }
 
-    /// Rebuild LogCask according to the log。
-    /// Used to read the log file and recover the BTreeMap in the memory when the database is started.
+    /// 用于在数据库启动时，根据日志重建LogCask，恢复出内存当中的BTreeMap
     ///
-    /// Logic:
-    ///    1. Traverse from the beginning of the log file
-    ///    2. Read out key_len and value_len first, where if value_len is -1, it proves that it is tombstone at present.
-    ///    3. If it is -1, encapsulate a none, otherwise calculate the value_offset.
-    ///    4. Read out the key, and then decide whether to insert or delete the map according to whether it is tombstone.
-    ///    5. Error handling
-    ///    6. Loop until the end of the log file
+    /// 逻辑:
+    ///    1. 从日志文件的开头开始遍历
+    ///    2. 先读取出key_len和value_len，其中，如果value_len为-1则证明当前为tombstone
+    ///    3. 如果是-1就封装一个none，否则计算出value_offset
+    ///    4. 读取出key，之后根据是否为tombstone来决定对map是插入还是删除
+    ///    5. 错误处理
+    ///    6. 循环直至日志文件末尾
     pub fn build_keydir(&mut self) -> CResult<KeyDir> {
         let mut len_buf = [0u8; 4];
         let mut keydir = KeyDir::new();
@@ -126,7 +125,7 @@ impl Log {
         Ok(keydir)
     }
 
-    /// It is necessary to read the corresponding value according to the incoming offset and length.
+    /// 根据传入的偏移量和长度读取相应的值。
     pub fn read_value(&mut self, value_pos: u64, value_len: u32) -> CResult<Vec<u8>> {
         let mut value = vec![0; value_len as usize];
         self.file.seek(SeekFrom::Start(value_pos))?;
@@ -134,10 +133,8 @@ impl Log {
         Ok(value)
     }
 
-    /// Appends a key/value entry to the log file, using a None value for tombstones. It returns the position and length of the entry.
-    ///
-    /// Write key_len, value_len(or tombstone), key_bytes and value_bytes respectively (if it is deleted for so long), finally call flush to persist to disk,
-    /// and finally return an offset and len for saving in BTreeMap.
+    /// 分别写入key_len，value_len(or tombstone)，key_bytes，value_bytes(如果是删除那么使用None值)，最后调用flush持久化到磁盘，
+    /// 最后返回一个offset和len，用于保存到BTreeMap当中
     pub fn write_entry(&mut self, key: &[u8], value: Option<&[u8]>) -> CResult<(u64, u32)> {
         let key_len = key.len() as u32;
         let value_len = value.map_or(0, |v| v.len() as u32);

@@ -2,9 +2,7 @@ use crate::error::CResult;
 use crate::storage::engine::Engine;
 use crate::storage::{ScanIteratorT, Status};
 
-/// The pure memory storage engine uses BTreeMap,
-/// which stores the key and value directly in the memory,
-/// and will not persist the data.
+/// 纯内存的存储引擎，使用的就是BTreeMap，将key和value直接存储在内存当中，不会对数据进行持久化
 pub struct Memory {
     data: std::collections::BTreeMap<Vec<u8>, Vec<u8>>,
 }

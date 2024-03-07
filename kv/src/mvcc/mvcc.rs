@@ -1,16 +1,16 @@
-//! This mod implements MVCC (Multi-Version Concurrency Control), a widely used method for ACID transactions and concurrency control.
-//! It allows multiple concurrent transactions to access and modify the same dataset, isolates them from each other,
-//! detects and handles conflicts, and commits their writes atomically as a single unit.
-//! It uses an underlying storage engine to store raw keys and values.
-//!
+//! 这个模块实现了MVCC（多版本并发控制），这是一种广泛使用的ACID事务和并发控制方法。
+//! 它允许多个并发事务访问和修改同一数据集，将它们彼此隔离，
+//! 检测和处理冲突，并将其写入作为一个单元进行原子化提交。
+//! 它使用底层存储引擎来存储原始键和值。
 //!
 //! VERSIONS
 //! ========
-//! MVCC handles concurrency control by managing multiple historical versions of keys, identified by a timestamp.
-//! Every write adds a new version at a higher timestamp, with deletes having a special tombstone value.
+//! MVCC通过管理由时间戳标识的密钥的多个历史版本来处理并发控制。
+//! 每次写入都会以更高的时间戳添加一个新版本，删除时会有一个特殊的tombstone值。
 //!
-//! For example, the keys a,b,c,d may have the following values at various logical timestamps (x is tombstone):
+//! For example, the keys a,b,c,d 可以在任何 logical timestamps 的维度下有如下值的变化(x 逻辑删除):
 //!
+//! <code>
 //! Time
 //! 5
 //! 4  a4
@@ -18,48 +18,44 @@
 //! 2
 //! 1  a1      c1  d1
 //!    a   b   c   d   Keys
+//! </code>
 //!
-//! * At time t1, a transaction writes a=a1,c=c1,d=d1 and commits it.
-//! * At time t2, transaction T2 is started, will see the values a=a1, c=c1, d=d1.
-//! * At t3, a transaction writes b=b3 and deletes D.
-//! * At t4, a transaction writes a=a4.
-//! * A different transaction t5 running at T=5 will see a=a4, b=b3, c=c1.
+//! * 在t1时刻，事务写入a=a1，c=c1，d=d1并提交它。
+//! * 在t2时刻，开启了事务t2，将看到值a＝a1，c＝c1，d＝d1。
+//! * 在t3时刻，事务写入b＝b3, 并删除d。
+//! * 在t4时刻，事务写入a=a4。
+//! * 在T＝5处运行的不同事务t5将看到A＝a4，b＝b3，c＝c1。
 //!
-//! KV Storage Engine uses logical timestamps with a sequence number stored in `Key::NextVersion`.
-//! Each new read-write transaction takes its timestamp from the current value of `Key::NextVersion`
-//! and then increments the value for the next transaction.
+//!
+//! KV存储引擎使用逻辑时间戳和存储在 `Key::NextVersion` 中的序列号。
+//! 每个新的读写事务都从 `Key::NextVersion` 的当前值中获取其时间戳，然后增加下一个事务的值。
 //!
 //!
 //! ISOLATION
 //! =========
-//! MVCC provides an isolation level called snapshot isolation.
-//! Briefly, transactions see a consistent snapshot of the database state as of their start time.
-//! Writes made by concurrent or subsequent transactions are never visible to it.
-//! If two concurrent transactions write to the same key they will conflict and one of them must retry.
-//! A transaction's writes become atomically visible to subsequent transactions only when they commit,
-//! and are rolled back on failure.
-//! Read-only transactions never conflict with other transactions.
+//! MVCC提供了一种称为快照隔离的隔离级别。
+//! 简而言之，事务在开始时看到数据库状态的一致快照。并发或后续事务所做的写入对它来说永远是不可见的。
+//! 如果两个并发事务写入相同的键，它们会发生冲突，其中一个必须重试。
+//! 事务的写入只有在提交时才能被后续事务原子地看到，并在失败时回滚。
+//! 只读事务永远不会与其他事务冲突。
 //!
-//! Transactions write new versions at their timestamp, storing them as `Key::Version(key, version) => value`.
-//! If a transaction writes to a key and finds a newer version, it returns an error and the client must retry.
+//! 事务会在时间戳处写入新版本，并将它们存储为 `Key::Version(key, version) => value`。
+//! 如果事务写入一个键并发现一个较新的版本，它将返回一个错误，客户端必须重试。
 //!
-//! Active (uncommitted) read-write transactions record their version in the active set,
-//! stored as `Key::TxnActive(version)`.
-//! When new transactions begin, they take a snapshot of this active set,
-//! and any key versions that belong to a transaction in the active set are considered `invisible` (to anyone except that transaction itself).
-//! Writes to keys that already have a past version in the active set will also return an error.
+//! 活动（未提交）读写事务在活动集中记录它们的版本，存储为  `Key::TxnActive(version)`。
+//! 当新事务开始时，它们会获取这个活动集的快照， 并且属于活动集中事务的任何密钥版本都被认为是“不可见的”（除了该事务本身之外的任何人）。
+//! 写入已包含活动集中的旧版本的密钥也将返回错误。
 //!
-//! To commit, a transaction simply deletes its record in the active set.
-//! This will immediately (and, crucially, atomically) make all of its writes visible to subsequent transactions,
-//! but not ongoing ones. If the transaction is cancelled and rolled back,
-//! it maintains a record of all keys it wrote as `Key::TxnWrite(version, key)`,
-//! so that it can find the corresponding versions and delete them before removing itself from the active set.
+//! 提交事务时，只需删除活动集中的记录。这将立即（并且至关重要地）使所有后续事务的写入可见，但不会对正在进行的事务可见。
+//! 如果事务被取消和回滚，它将保留所有写入的键的记录，如 `Key::TxnWrite(version, key)`，以便它可以在从活动集中删除自身之前找到对应的版本并将其删除。
 //!
-//! For example, Consider the following example, where we have two ongoing transactions at time T=2 and T=5,
-//! with some writes that are not yet committed marked in parentheses.
+//! 记录真正变成可见是根据提交的时刻决定的，在事务未提交前，该事务写入的数据对于自己是可见的，但是对于其他的事务不可见。
+//!
+//! For example, 考虑以下示例，其中我们在时间T=2和T=5有两个正在进行的交易，括号中标记了一些尚未提交的写入。.
 //!
 //! Active set: [2, 5]
 //!
+//! <code>
 //! Time
 //! 5 (a5)
 //! 4  a4
@@ -67,18 +63,16 @@
 //! 2         (x)     (e2)
 //! 1  a1      c1  d1
 //!    a   b   c   d   e   Keys
+//! </code>
 //!
 //! * (x): delete key
 //! * (e2): put data but uncommit
 //!
-//! * The data written by transaction T5 is not committed, and T5 is maintained in the Active set.
-//!   T5 does not see the tombstone at c@2 nor the value e=e2, because version=2 is in its active set.
-//! * T2 deleting c1 and writing e2 are visible to itself, but not to the transaction T5 opened later.
-//!   T2 will see a=a1, d=d1, e=e2 (it sees its own writes). T2 does not see any newer versions
+//! * 事务T5写入的数据未提交，T5保持在活动集中。 T5 看不到 c@2 处的墓碑删除动作，也看不到值 e=e2，因为版本=2 处于其活动集中，未提交。
+//! * T2删除c1并写入e2的操作对它自己可见，但对稍后打开的事务T5不可见。T2 将看到 a=a1、d=d1、e=e2（它看到的是它自己的写入）。T2 看不到任何更新版本。
 //!
-//! To commit, t2 can remove itself from the active set.
-//! A new transaction t6 starting after the commit will then see c as deleted and e=e2.
-//! t5 will still not see any of t2's writes, because it's still in its local snapshot of the active set at the time it began.
+//! 如果t2存在事物提交， t2将会从事物活动集中被删除。 在t2提交后开始的新事务 t6 将看到 c 被删除，并且 e=e2。
+//! t5 仍然不会看到 t2 的任何写入，因为它仍然处于开始时的活动集的本地快照中。
 //!
 //!
 //! mvcc:
@@ -93,8 +87,7 @@ use crate::mvcc::transaction::{Transaction, TransactionDef, TransactionState};
 use crate::mvcc::Version;
 use crate::storage::engine::Engine;
 
-/// An MVCC-based transactional key-value engine.
-/// It wraps an underlying storage engine that's used for raw key/value storage.
+/// 基于MVCC的事务键值引擎，提供最基本的ACID和MVCC支持。它包装了一个用于键/值存储的基础存储引擎。
 pub struct MVCC<E: Engine> {
     engine: Arc<Mutex<E>>,
 }
@@ -111,8 +104,8 @@ pub(crate) trait MVCCDef<E: Engine> {
     fn status(&self) -> CResult<Status>;
 }
 
-/// MVCC keys, using the KeyCode encoding which preserves the ordering and grouping of keys.
-/// Cow byte slices allow encoding borrowed values and decoding into owned values.
+/// MVCC键，使用KeyCode编码，保留键的顺序和分组。
+/// Cow byte slices允许对借用值进行编码并将其解码为自有值。
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Key<'a> {
     /// The next available version.
@@ -141,9 +134,8 @@ pub enum Key<'a> {
         Version,
     ),
 
-    /// Unversioned non-transactional key/value pairs.
-    /// These exist separately from versioned keys, i.e. the unversioned key "abcdefg" is entirely independent of the versioned key "abcdefg@7".
-    /// These are mostly used for metadata.
+    /// 无版本的非事务性键/值对。
+    /// 这些与versioned keys分开存在，即未版本化的 key  “abcdefg” 完全独立于 versioned key “abcdefg@7”。 这些主要用于元数据。
     Unversioned(
         #[serde(with = "serde_bytes")]
         #[serde(borrow)]
@@ -161,7 +153,7 @@ impl<'a> Key<'a> {
     }
 }
 
-/// MVCC key prefixes, for prefix scans. These must match the keys above, including the enum variant index.
+/// MVCC 键前缀，用于前缀扫描。这些必须与上面的键匹配，包括枚举变量索引。
 #[derive(Debug, Deserialize, Serialize)]
 enum KeyPrefix<'a> {
     NextVersion,

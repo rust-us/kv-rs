@@ -4,35 +4,26 @@ use crate::storage::{KeyDir, ScanIteratorT, Status};
 use crate::storage::engine::Engine;
 use crate::storage::log::Log;
 
-/// A very simple variant of LogCask, itself a very simple log-structured key-value engine.
+/// LogCask 是一个非常简单的日志结构的键值引擎。
 ///
-/// LogCask writes key-value pairs to an append-only log file, and keeps a
-/// mapping of keys to file positions in memory. All live keys must fit in
-/// memory. Deletes write a tombstone value to the log file. To remove old
-/// garbage, logs can be compacted by writing new logs containing only live
-/// data, skipping replaced values and tombstones.
+/// LogCask将键值对写入一个只追加数据的日志文件中，并保留一个内存索引(hash mapping)， 内存索引维护key在文件中的position。
 ///
-/// This implementation makes several significant simplifications over standard LogCask:
+/// 所有活动的key都必须出现在内存索引中。
+/// 删除某个key是将逻辑删除值写入日志文件。去除该key的索引。
 ///
-/// - Instead of writing multiple fixed-size log files, it uses a single
-///   append-only log file of arbitrary size. This increases the compaction
-///   volume, since the entire log file must be rewritten on every compaction,
-///   and can exceed the filesystem's file size limit.
+/// - 该实现不写多个固定大小的日志文件，而是使用单个任意大小的日志文件，且只做追加。这样实现的好处是：增加了紧密度，避免小文件产生，但坏处是，不适合大数据量的场景。
 ///
-/// - Hint files are not used, the log itself is scanned when opened to
-///   build the keydir. Hint files only omit values, the hint files would be nearly as large as
-///   the compacted log files themselves.
+/// - 打开数据文件时会扫描日志本身以构建 keydir。
 ///
-/// - Log entries don't contain timestamps or checksums.
+/// - log entry 不包含timestamps or checksums.
 ///
-/// The structure of a log entry is:
-///
+/// log entry 的结构为：
 /// - Key length as big-endian u32.
 /// - Value length as big-endian i32, or -1 for tombstones.
 /// - Key as raw bytes (max 2 GB).
 /// - Value as raw bytes (max 2 GB).
 pub struct LogCask {
-    /// The active append-only log file.
+    /// The active append-only log file
     log: Log,
 
     /// use index, Maps keys to a value position and length in the log file.
@@ -40,7 +31,7 @@ pub struct LogCask {
 }
 
 impl LogCask {
-    /// Opens or creates a LogCask in the given file.
+    /// 新建一个 LogCask，并调用上面分析过的log.build_keydir来从日志文件当中恢复内存当中的map
     pub fn new(path: PathBuf) -> CResult<Self> {
         Self::new_with_lock(path, true)
     }
@@ -53,12 +44,10 @@ impl LogCask {
         Ok(Self { log, keydir })
     }
 
-    /// Opens a LogCask, and automatically compacts it if the amount of garbage exceeds the given ratio when opened.
-    /// Suitable for small-scale data sets。
-    /// And, Compact operation will only be performed when the kvdb is started,
-    /// and this process will lock the log file.
+    /// 用于处理小规模数据集的引擎模式。
     ///
-    /// In there, the current garbage_ratio will be calculated, and if it exceeds the threshold, it will be compacted.
+    /// 只有在kvdb启动时才会执行 Compact 操作，并且此过程将锁定日志文件。
+    /// 在new_compact当中，会计算当前的garbage_ratio，无效数据(垃圾量)超过阈值，就进行compact。
     pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> CResult<Self> {
         let mut s = Self::new(path)?;
 
@@ -99,6 +88,7 @@ impl Engine for LogCask {
     type ScanIterator<'a> = LogScanIterator<'a>;
 
     fn delete(&mut self, key: &[u8]) -> CResult<i64> {
+        // 写入的内容为tombstone(None)，标志key对应的val已经被删除，同时删除内存索引中的kv
         self.log.write_entry(key, None)?;
         self.keydir.remove(key);
         Ok(1)
@@ -109,6 +99,7 @@ impl Engine for LogCask {
     }
 
     fn get(&mut self, key: &[u8]) -> CResult<Option<Vec<u8>>> {
+        // 首先查询内存当中的map，如果不存在返回不存在，如果能查询到，那么就根据metadata去磁盘当中读取出对应的value
         if let Some((value_pos, value_len)) = self.keydir.get(key) {
             Ok(Some(self.log.read_value(*value_pos, *value_len)?))
         } else {
@@ -129,6 +120,7 @@ impl Engine for LogCask {
     }
 
     fn set(&mut self, key: &[u8], value: Vec<u8>) -> CResult<()> {
+        // 首先向磁盘当中写入一条新的Entry，并且更新内存的map，保存新Entry的offset
         let (pos, len) = self.log.write_entry(key, Some(&*value))?;
         let value_len = value.len() as u32;
         self.keydir.insert(key.to_vec(), (pos + len as u64 - value_len as u64, value_len));
@@ -156,8 +148,8 @@ impl Engine for LogCask {
 }
 
 impl LogCask {
-    /// Create a new file, call `write_log` to rebuild the log file and save it.
-    /// Compacts the current log file by writing out a new log file containing only live keys and replacing the current file with it.
+    /// 在写入过程当中，会有key被更新或者删除，但是旧版本的key依旧会存在于日志文件当中，随着时间的增加，日志文件当中的无效数据就会越来越多，占用额外的存储空间。因此就需要compaction将其清除。
+    /// LogCask compact 实现是，遍历当前内存当中存在的key，创建一个新文件，调用“write_log”重建日志文件并保存。并用它替换当前文件。
     pub fn compact(&mut self) -> CResult<()> {
         let mut tmp_path = self.log.path.clone();
         // need double disk size
@@ -215,9 +207,7 @@ impl LogCask {
         Ok(())
     }
 
-    /// Traverse the current map, read from the original log file, write into the new log file, and build a new map.
-    ///
-    /// in other words, writes out a new log file with the live entries of the current log file and returns it along with its keydir. Entries are written in key order.
+    /// 遍历当前的map，去原本的日志文件当中读取，写入到新的日志文件当中，并且构建新的map
     fn write_log(&mut self, path: PathBuf) -> CResult<(Log, KeyDir)> {
         let mut new_keydir = KeyDir::new();
         let mut new_log = Log::new(path)?;
@@ -240,17 +230,15 @@ impl Drop for LogCask {
     }
 }
 
-/// Used for range reading.
+/// 用于进行范围读取
 pub struct LogScanIterator<'a> {
     inner: std::collections::btree_map::Range<'a, Vec<u8>, (u64, u32)>,
     log: &'a mut Log,
 }
 
 impl<'a> LogScanIterator<'a> {
-    /// A map function is defined, and self.log.read_value () is called to read from the disk,
-    /// which is used to convert key and offset in BTreeMap into real kv.
-    ///
-    /// Since both inner and log are reference types, the life cycle is marked.
+    /// map函数，调用self.log.read_value()去磁盘当中进行读取，用于将BTreeMap当中的key与offset转换为真实的kv。
+    /// 由于inner和log都是引用类型，因此标注了生命周期
     fn map(&mut self, item: (&Vec<u8>, &(u64, u32))) -> <Self as Iterator>::Item {
         let (key, (value_pos, value_len)) = item;
         Ok((key.clone(), self.log.read_value(*value_pos, *value_len)?))
@@ -301,7 +289,6 @@ mod tests {
         address: String,
     }
 
-    /// Creates a new LogCask engine for testing.
     fn setup() -> CResult<LogCask> {
         let path = tempdir::TempDir::new("demo")?.path().join("mydb");
         println!("path:{:?}", &path);

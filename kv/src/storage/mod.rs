@@ -6,10 +6,12 @@ pub mod memory;
 use serde_derive::{Deserialize, Serialize};
 use crate::error::CResult;
 
-/// Maps keys to a value position and length in the log file. It is convenient for sequential traversal and compaction.
+/// KeyDir是一个内存当中的map，这里使用的是BTreeMap的实现方式，便于进行顺序遍历进行compaction。
+/// key为存储的key，而value为Entry的metadata，记录长度和位置，用于进行偏移读取.
+/// map当中始终保存当前key的最新版本的位置。 它便于顺序遍历和压缩。
 pub type KeyDir = std::collections::BTreeMap<Vec<u8>, (u64, u32)>;
 
-/// Indicates the status of the current storage engine.
+/// 用于表示当前存储引擎的状态
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     /// The name of the storage engine.
