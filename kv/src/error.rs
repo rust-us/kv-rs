@@ -44,6 +44,12 @@ impl serde::de::Error for Error {
     }
 }
 
+impl From<Box<bincode::ErrorKind>> for Error {
+    fn from(err: Box<bincode::ErrorKind>) -> Self {
+        Error::Internal(err.to_string())
+    }
+}
+
 impl From<config::ConfigError> for Error {
     fn from(err: config::ConfigError) -> Self {
         Error::Config(err.to_string())

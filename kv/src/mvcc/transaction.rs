@@ -4,6 +4,7 @@ use std::ops::RangeBounds;
 use std::sync::{Arc, Mutex, MutexGuard};
 use serde_derive::{Deserialize, Serialize};
 use crate::error::CResult;
+use crate::mvcc::mvcc::Key;
 use crate::mvcc::scan::Scan;
 use crate::mvcc::transaction::seals::EngineSealedMut;
 use crate::mvcc::Version;
@@ -66,13 +67,16 @@ impl TransactionStateDef for TransactionState {
 }
 
 pub trait TransactionDef<E: Engine> {
-    /// 以读写模式开始新事务。 这将分配一个新版本，交易可以在其中写入， 将其添加到活动集，并记录其活动快照以进行时间旅行查询。
+    /// 开启一个read-write的新事务。 这将分配一个新版本，交易可以在其中写入， 将其添加到活动集，并记录其活动快照以进行时间旅行查询。
     fn begin(engine: Arc<Mutex<E>>) -> CResult<Transaction<E>>;
 
     /// Begins a new read-only transaction.
     /// 如果给出了版本，它将看到该版本开始时的状态（忽略该版本中的写入）。
     /// 换句话说，它看到的状态与该版本开始时的读写事务看到的状态相同。
     fn begin_read_only(engine: Arc<Mutex<E>>, as_of: Option<Version>) -> CResult<Transaction<E>>;
+
+    /// Resumes a transaction from the given state.
+    fn resume(engine: Arc<Mutex<E>>, s: TransactionState) -> CResult<Self> where Self: Sized;
 
     /// 获取当前活动事务的集合。
     fn scan_active(session: &mut MutexGuard<E>) -> CResult<HashSet<Version>>;
@@ -129,10 +133,38 @@ impl <E: Engine> Transaction<E> {
 
 impl <E: Engine> TransactionDef<E> for Transaction<E> {
     fn begin(engine: Arc<Mutex<E>>) -> CResult<Transaction<E>> {
-        todo!()
+        let mut session = engine.lock()?;
+
+        // Allocate a new version 作为当前事务的tid,或者可以视为一个时间戳，之后+1写回。
+        // 传统MYSQL的方式实现为 buffer pool + wal机制，此处采用的是在存储引擎当中同步持久化 NextVersion 的方式。
+        let version = match session.get(&Key::NextVersion.encode()?)? {
+            Some(ref v) => bincode::deserialize(v)?,
+            None => 1,
+        };
+        session.set(&Key::NextVersion.encode()?, bincode::serialize(&(version + 1))?)?;
+
+        // 从存储引擎当中扫描，恢复出当前的active_set。开启一个事务后，就向存储引擎当中写入一条Key::TxnActive，带上自己的version，之后扫描出所有Key::TxnActive的key，恢复出active_set，
+        // 由于存储引擎本身是一个append-only的存储设计， 就算是将value设置为完整的active_set，那么每次写入也是追加写入，并且需要完整的写入整个active_set，写入量反而增大，
+        // active_set只会在事务begin的时候进行读取
+        let mut active = HashSet::new();
+
+        Ok(
+            Self {
+                engine: engine.clone(),
+                st: TransactionState {
+                    version,
+                    read_only: true,
+                    active
+                }
+            }
+        )
     }
 
     fn begin_read_only(engine: Arc<Mutex<E>>, as_of: Option<Version>) -> CResult<Transaction<E>> {
+        todo!()
+    }
+
+    fn resume(engine: Arc<Mutex<E>>, s: TransactionState) -> CResult<Self> where Self: Sized {
         todo!()
     }
 
@@ -141,15 +173,15 @@ impl <E: Engine> TransactionDef<E> for Transaction<E> {
     }
 
     fn version(&self) -> Version {
-        todo!()
+        self.st.version
     }
 
     fn is_read_only(&self) -> bool {
-        todo!()
+        self.st.read_only
     }
 
     fn state(&self) -> &TransactionState {
-        todo!()
+        &self.st
     }
 
     fn commit(self) -> CResult<()> {

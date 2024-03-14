@@ -2,6 +2,7 @@ pub mod log;
 pub mod engine;
 pub mod log_cask;
 pub mod memory;
+pub mod mani_fest_cstore;
 
 use serde_derive::{Deserialize, Serialize};
 use crate::error::CResult;
