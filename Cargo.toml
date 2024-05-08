@@ -2,7 +2,7 @@
 members = [
     "./kv",
     "./kv-cli",
-    "example",
+#    "example",
 ]
 
 [workspace.package]
