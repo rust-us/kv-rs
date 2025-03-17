@@ -114,9 +114,9 @@ mod test {
         let mut buf = BytesMut::with_capacity(1024);
         for i in 0..88 {
             let p = Persion {
-                name: format!("name{}", i),
-                age: i + 1,
-                address: format!("address{}", i),
+                name: format!("name{}", &i),
+                age: &i + 1,
+                address: format!("address{}", &i),
             };
             persion_list.push(p.clone());
 
@@ -145,7 +145,7 @@ mod test {
             assert_eq!(&r.address, &cache_p.address);
             assert_eq!(&r.age, &cache_p.age);
 
-            i_for_test += 1;
+            i_for_test = i_for_test + 1;
         }
 
         assert_eq!(1, 1);
