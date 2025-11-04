@@ -16,6 +16,7 @@ use kv_rs::info::get_info;
 use kv_rs::row::rows::ServerStats;
 use kv_rs::storage::engine::Engine;
 use kv_rs::storage::log_cask::LogCask;
+use kv_rs::encoding::{EncodingEngine, EncodingFormat};
 use crate::ast::token_kind::TokenKind;
 use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
@@ -31,6 +32,7 @@ pub struct Session {
 
     running: Arc<AtomicBool>,
     engine: LogCask,
+    encoding_engine: EncodingEngine,
 
     settings: ConfigLoad,
     query: String,
@@ -48,6 +50,7 @@ impl Session {
         }
 
         let engine = LogCask::new_compact(settings.get_data_dir().clone(), settings.get_compact_threshold())?;
+        let encoding_engine = EncodingEngine::new(EncodingFormat::Base64);
 
         let mut keywords = Vec::with_capacity(1024);
 
@@ -55,6 +58,7 @@ impl Session {
             is_repl,
             running,
             engine,
+            encoding_engine,
             settings,
             query: String::new(),
             in_comment_block: false,
@@ -307,6 +311,13 @@ impl Session {
         token_list: Vec<Token<'_>>,
     ) -> Result<Option<ServerStats>> {
 
+        // Handle special case for SHOW ENCODINGS
+        if token_list.len() >= 2 
+            && token_list[0].kind == TokenKind::SHOW 
+            && token_list[1].kind == TokenKind::ENCODINGS {
+            return self.dispatcher_executor(QueryKind::ShowEncodings, is_repl, query, token_list).await;
+        }
+
         let kind_may = QueryKind::try_from(token_list[0].kind.clone());
         match kind_may {
             Ok(kind) => {
@@ -492,6 +503,300 @@ impl Session {
 
                 Ok(Some(ServerStats::default()))
             }
+            (QueryKind::Encode, _) => {
+                if token_list.len() < 3 {
+                    return Err(anyhow!("Usage: ENCODE <key> <format>\nSupported formats: base64, hex, json"));
+                }
+                
+                let key = token_list[1].get_slice();
+                let format_str = token_list[2].get_slice();
+                
+                // Parse format
+                let format = match format_str.to_lowercase().as_str() {
+                    "base64" => EncodingFormat::Base64,
+                    "hex" => EncodingFormat::Hex,
+                    "json" => EncodingFormat::Json,
+                    _ => return Err(anyhow!("Unsupported format: {}. Supported formats: base64, hex, json", format_str)),
+                };
+                
+                // Get the value from storage
+                let value = match self.engine.get(key.as_bytes())? {
+                    Some(data) => data,
+                    None => return Err(anyhow!("Key not found: {}", key)),
+                };
+                
+                // Encode the value
+                match self.encoding_engine.encode(&value, format) {
+                    Ok(encoded) => {
+                        if is_repl {
+                            let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                            eprintln!("Encoded ({}): {}", format_str, encoded);
+                            show.output(1);
+                        }
+                        Ok(Some(ServerStats::default()))
+                    }
+                    Err(e) => Err(anyhow!("Encoding failed: {}", e)),
+                }
+            }
+            (QueryKind::Decode, _) => {
+                if token_list.len() < 2 {
+                    return Err(anyhow!("Usage: DECODE <key> [format]\nSupported formats: base64, hex, json"));
+                }
+                
+                let key = token_list[1].get_slice();
+                let format_str = if token_list.len() >= 3 {
+                    Some(token_list[2].get_slice())
+                } else {
+                    None
+                };
+                
+                // Get the encoded value from storage
+                let encoded_value = match self.engine.get(key.as_bytes())? {
+                    Some(data) => String::from_utf8(data)
+                        .map_err(|_| anyhow!("Stored value is not valid UTF-8 text"))?,
+                    None => return Err(anyhow!("Key not found: {}", key)),
+                };
+                
+                // Determine format
+                let format = if let Some(fmt_str) = format_str {
+                    match fmt_str.to_lowercase().as_str() {
+                        "base64" => EncodingFormat::Base64,
+                        "hex" => EncodingFormat::Hex,
+                        "json" => EncodingFormat::Json,
+                        _ => return Err(anyhow!("Unsupported format: {}. Supported formats: base64, hex, json", fmt_str)),
+                    }
+                } else {
+                    // Auto-detect format
+                    match self.encoding_engine.detect(&encoded_value) {
+                        Ok(detected_formats) => {
+                            if detected_formats.is_empty() {
+                                return Err(anyhow!("Could not detect encoding format. Please specify format explicitly."));
+                            }
+                            detected_formats[0].format
+                        }
+                        Err(e) => return Err(anyhow!("Format detection failed: {}", e)),
+                    }
+                };
+                
+                // Decode the value
+                match self.encoding_engine.decode(&encoded_value, format) {
+                    Ok(decoded) => {
+                        if is_repl {
+                            let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                            let decoded_str = String::from_utf8_lossy(&decoded);
+                            eprintln!("Decoded ({}): {}", format, decoded_str);
+                            show.output(1);
+                        }
+                        Ok(Some(ServerStats::default()))
+                    }
+                    Err(e) => Err(anyhow!("Decoding failed: {}", e)),
+                }
+            }
+            (QueryKind::MEncode, _) => {
+                if token_list.len() < 3 {
+                    return Err(anyhow!("Usage: MENCCODE <key1> [key2] ... <format>\nSupported formats: base64, hex, json"));
+                }
+                
+                // Last token is the format, all others are keys
+                let format_str = token_list.last().unwrap().get_slice();
+                let keys: Vec<&str> = token_list[1..token_list.len()-1].iter()
+                    .map(|token| token.get_slice())
+                    .collect();
+                
+                if keys.is_empty() {
+                    return Err(anyhow!("At least one key must be specified"));
+                }
+                
+                // Parse format
+                let format = match format_str.to_lowercase().as_str() {
+                    "base64" => EncodingFormat::Base64,
+                    "hex" => EncodingFormat::Hex,
+                    "json" => EncodingFormat::Json,
+                    _ => return Err(anyhow!("Unsupported format: {}. Supported formats: base64, hex, json", format_str)),
+                };
+                
+                if is_repl {
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                    
+                    let mut success_count = 0;
+                    let mut error_count = 0;
+                    
+                    eprintln!("Batch encoding {} keys with format {}:", keys.len(), format_str);
+                    
+                    for key in keys {
+                        match self.engine.get(key.as_bytes()) {
+                            Ok(Some(value)) => {
+                                match self.encoding_engine.encode(&value, format) {
+                                    Ok(encoded) => {
+                                        eprintln!("  {} -> {}", key, encoded);
+                                        success_count += 1;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("  {} -> ERROR: {}", key, e);
+                                        error_count += 1;
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                eprintln!("  {} -> ERROR: Key not found", key);
+                                error_count += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("  {} -> ERROR: {}", key, e);
+                                error_count += 1;
+                            }
+                        }
+                    }
+                    
+                    eprintln!();
+                    eprintln!("Batch encoding completed: {} successful, {} errors", success_count, error_count);
+                    show.output(success_count + error_count);
+                }
+                
+                Ok(Some(ServerStats::default()))
+            }
+            (QueryKind::MDecode, _) => {
+                if token_list.len() < 2 {
+                    return Err(anyhow!("Usage: MDECODE <key1> [key2] ...\nAuto-detects format or uses configured default"));
+                }
+                
+                // All tokens except the first are keys
+                let keys: Vec<&str> = token_list[1..].iter()
+                    .map(|token| token.get_slice())
+                    .collect();
+                
+                if is_repl {
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                    
+                    let mut success_count = 0;
+                    let mut error_count = 0;
+                    
+                    eprintln!("Batch decoding {} keys (auto-detecting format):", keys.len());
+                    
+                    for key in keys {
+                        match self.engine.get(key.as_bytes()) {
+                            Ok(Some(data)) => {
+                                match String::from_utf8(data) {
+                                    Ok(encoded_value) => {
+                                        // Auto-detect format
+                                        match self.encoding_engine.detect(&encoded_value) {
+                                            Ok(detected_formats) => {
+                                                if detected_formats.is_empty() {
+                                                    eprintln!("  {} -> ERROR: Could not detect encoding format", key);
+                                                    error_count += 1;
+                                                } else {
+                                                    let format = detected_formats[0].format;
+                                                    let confidence = detected_formats[0].confidence;
+                                                    
+                                                    match self.encoding_engine.decode(&encoded_value, format) {
+                                                        Ok(decoded) => {
+                                                            let decoded_str = String::from_utf8_lossy(&decoded);
+                                                            eprintln!("  {} ({}, {:.1}%) -> {}", key, format, confidence * 100.0, decoded_str);
+                                                            success_count += 1;
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("  {} -> ERROR: Decoding failed: {}", key, e);
+                                                            error_count += 1;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("  {} -> ERROR: Format detection failed: {}", key, e);
+                                                error_count += 1;
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        eprintln!("  {} -> ERROR: Stored value is not valid UTF-8 text", key);
+                                        error_count += 1;
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                eprintln!("  {} -> ERROR: Key not found", key);
+                                error_count += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("  {} -> ERROR: {}", key, e);
+                                error_count += 1;
+                            }
+                        }
+                    }
+                    
+                    eprintln!();
+                    eprintln!("Batch decoding completed: {} successful, {} errors", success_count, error_count);
+                    show.output(success_count + error_count);
+                }
+                
+                Ok(Some(ServerStats::default()))
+            }
+            (QueryKind::Detect, _) => {
+                if token_list.len() < 2 {
+                    return Err(anyhow!("Usage: DETECT <key>\nDetects the encoding format of the value stored at key"));
+                }
+                
+                let key = token_list[1].get_slice();
+                
+                // Get the value from storage
+                let data = match self.engine.get(key.as_bytes())? {
+                    Some(data) => data,
+                    None => return Err(anyhow!("Key not found: {}", key)),
+                };
+                
+                // Convert to string for detection
+                let value_str = String::from_utf8(data)
+                    .map_err(|_| anyhow!("Stored value is not valid UTF-8 text"))?;
+                
+                // Detect format
+                match self.encoding_engine.detect(&value_str) {
+                    Ok(detected_formats) => {
+                        if is_repl {
+                            let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                            
+                            if detected_formats.is_empty() {
+                                eprintln!("No encoding format detected for key: {}", key);
+                                eprintln!("The value may be plain text or an unsupported format.");
+                            } else {
+                                eprintln!("Detected encoding formats for key '{}':", key);
+                                for (i, result) in detected_formats.iter().enumerate() {
+                                    let confidence_percent = result.confidence * 100.0;
+                                    eprintln!("  {}. {} ({:.1}% confidence)", i + 1, result.format, confidence_percent);
+                                }
+                                
+                                if detected_formats.len() > 1 {
+                                    eprintln!();
+                                    eprintln!("Recommendation: Use format '{}' (highest confidence)", detected_formats[0].format);
+                                }
+                            }
+                            
+                            show.output(detected_formats.len().max(1) as i64);
+                        }
+                        Ok(Some(ServerStats::default()))
+                    }
+                    Err(e) => Err(anyhow!("Format detection failed: {}", e)),
+                }
+            }
+            (QueryKind::ShowEncodings, _) => {
+                if is_repl {
+                    let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
+                    
+                    eprintln!("Supported encoding formats:");
+                    eprintln!("  base64  - Base64 encoding");
+                    eprintln!("  hex     - Hexadecimal encoding");
+                    eprintln!("  json    - JSON string encoding");
+                    eprintln!();
+                    eprintln!("Usage examples:");
+                    eprintln!("  ENCODE mykey base64");
+                    eprintln!("  DECODE mykey hex");
+                    eprintln!("  MENCCODE key1 key2 base64");
+                    eprintln!("  MDECODE key1 key2");
+                    eprintln!("  DETECT mykey");
+                    
+                    show.output(3);
+                }
+                Ok(Some(ServerStats::default()))
+            }
             (_, _) => {
                 println!("__ {}", &query);
 
@@ -523,6 +828,12 @@ pub enum QueryKind {
     GetSet,
     MGet,
     SetEx,
+    Encode,
+    Decode,
+    MEncode,
+    MDecode,
+    Detect,
+    ShowEncodings,
 }
 
 impl TryFrom<TokenKind> for QueryKind {
@@ -544,6 +855,11 @@ impl TryFrom<TokenKind> for QueryKind {
             TokenKind::GETSET => Ok(QueryKind::GetSet),
             TokenKind::MGET => Ok(QueryKind::MGet),
             TokenKind::SETEX => Ok(QueryKind::SetEx),
+            TokenKind::ENCODE => Ok(QueryKind::Encode),
+            TokenKind::DECODE => Ok(QueryKind::Decode),
+            TokenKind::MENCCODE => Ok(QueryKind::MEncode),
+            TokenKind::MDECODE => Ok(QueryKind::MDecode),
+            TokenKind::DETECT => Ok(QueryKind::Detect),
             _ => {
                 Err("UnSupport cmd".to_owned())
             }

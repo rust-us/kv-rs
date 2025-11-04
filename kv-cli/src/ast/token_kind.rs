@@ -198,6 +198,14 @@ pub enum TokenKind {
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DETECT", ignore(ascii_case))]
+    DETECT,
+    #[token("DECODE", ignore(ascii_case))]
+    DECODE,
+    #[token("ENCODE", ignore(ascii_case))]
+    ENCODE,
+    #[token("ENCODINGS", ignore(ascii_case))]
+    ENCODINGS,
     #[token("EXPIRE", ignore(ascii_case))]
     EXPIRE,
     #[token("FROM", ignore(ascii_case))]
@@ -206,6 +214,10 @@ pub enum TokenKind {
     GET,
     #[token("GETSET", ignore(ascii_case))]
     GETSET,
+    #[token("MDECODE", ignore(ascii_case))]
+    MDECODE,
+    #[token("MENCCODE", ignore(ascii_case))]
+    MENCCODE,
     #[token("MGET", ignore(ascii_case))]
     MGET,
     #[token("LIST", ignore(ascii_case))]
