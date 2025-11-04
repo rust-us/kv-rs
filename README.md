@@ -39,6 +39,7 @@ kvcli >
 
 ### kvcli help
 ```doc
+❯ cargo run -p kvcli -- --help
 ❯ ./kvcli --help
 
 ██  ██  █        █
