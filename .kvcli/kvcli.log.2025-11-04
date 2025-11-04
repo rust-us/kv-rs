@@ -1,0 +1,1 @@
+[2025-11-04T21:47:19+08:00] - INFO - [kvcli] kvcli start args: Args { debug: false, help: true, config: "config/kvdb.yaml", cmd: None, quiet: false, log_level: "info", non_interactive: false, query: None }

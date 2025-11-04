@@ -22,3 +22,15 @@ show_affected : false
 progress_color : ""
 # default false
 show_progress : false
+
+# Encoding configuration
+encoding:
+  # Default encoding format for new data (base64, hex, json)
+  # default "base64"
+  default_format: "base64"
+  # Enable automatic format detection
+  # default true
+  auto_detect: true
+  # Batch processing size for bulk operations
+  # default 100
+  batch_size: 100

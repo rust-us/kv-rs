@@ -16,7 +16,7 @@ use kv_rs::info::get_info;
 use kv_rs::row::rows::ServerStats;
 use kv_rs::storage::engine::Engine;
 use kv_rs::storage::log_cask::LogCask;
-use kv_rs::encoding::{EncodingEngine, EncodingFormat};
+use kv_rs::encoding::{EncodingEngine, EncodingFormat, Base64Codec, HexCodec, JsonCodec};
 use crate::ast::token_kind::TokenKind;
 use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
@@ -42,6 +42,31 @@ pub struct Session {
 }
 
 impl Session {
+    /// Initialize the encoding engine with configuration and register codecs
+    fn initialize_encoding_engine(settings: &ConfigLoad) -> Result<EncodingEngine> {
+        // Validate encoding configuration first
+        settings.validate_encoding_config()
+            .map_err(|e| anyhow!("Invalid encoding configuration: {}", e))?;
+        
+        // Get the default format from configuration
+        let default_format = settings.get_default_encoding_format()
+            .map_err(|e| anyhow!("Failed to get default encoding format: {}", e))?;
+        
+        // Create encoding engine with the configured default format
+        let mut encoding_engine = EncodingEngine::new(default_format);
+        
+        // Register all available codecs
+        encoding_engine.register_codec(EncodingFormat::Base64, Box::new(Base64Codec::new()));
+        encoding_engine.register_codec(EncodingFormat::Hex, Box::new(HexCodec::new()));
+        encoding_engine.register_codec(EncodingFormat::Json, Box::new(JsonCodec::new()));
+        
+        info!("Encoding engine initialized with default format: {}", default_format);
+        info!("Auto-detection enabled: {}", settings.is_auto_detect_enabled());
+        info!("Batch size: {}", settings.get_batch_size());
+        
+        Ok(encoding_engine)
+    }
+
     pub async fn try_new(settings: ConfigLoad, is_repl: bool, running: Arc<AtomicBool>) -> Result<Self> {
         if is_repl {
             println!("Welcome to {}.", DEFAULT_PROMPT);
@@ -50,7 +75,9 @@ impl Session {
         }
 
         let engine = LogCask::new_compact(settings.get_data_dir().clone(), settings.get_compact_threshold())?;
-        let encoding_engine = EncodingEngine::new(EncodingFormat::Base64);
+        
+        // Initialize encoding engine with configuration
+        let encoding_engine = Self::initialize_encoding_engine(&settings)?;
 
         let mut keywords = Vec::with_capacity(1024);
 
@@ -803,6 +830,78 @@ impl Session {
                 Err(anyhow!("UnImplement command: [{}]", &query))
             }
         }
+    }
+
+    /// Update encoding configuration at runtime
+    pub fn update_encoding_config(&mut self, new_config: crate::server::config::EncodingConfig) -> Result<()> {
+        // Validate the new configuration
+        new_config.validate()
+            .map_err(|e| anyhow!("Invalid encoding configuration: {}", e))?;
+        
+        // Update the settings
+        self.settings.set_encoding_config(new_config.clone());
+        
+        // Update the encoding engine's default format
+        let new_default_format = new_config.get_default_format()
+            .map_err(|e| anyhow!("Failed to parse default format: {}", e))?;
+        self.encoding_engine.set_default_format(new_default_format);
+        
+        info!("Encoding configuration updated - Default format: {}, Auto-detect: {}, Batch size: {}", 
+              new_config.default_format, new_config.auto_detect, new_config.batch_size);
+        
+        Ok(())
+    }
+
+    /// Get current encoding configuration
+    pub fn get_encoding_config(&self) -> crate::server::config::EncodingConfig {
+        self.settings.get_encoding_config()
+    }
+
+    /// Update default encoding format
+    pub fn set_default_encoding_format(&mut self, format: EncodingFormat) -> Result<()> {
+        self.settings.set_default_encoding_format(format);
+        self.encoding_engine.set_default_format(format);
+        info!("Default encoding format updated to: {}", format);
+        Ok(())
+    }
+
+    /// Get current default encoding format
+    pub fn get_default_encoding_format(&self) -> Result<EncodingFormat> {
+        self.settings.get_default_encoding_format()
+    }
+
+    /// Check if auto-detection is enabled
+    pub fn is_auto_detect_enabled(&self) -> bool {
+        self.settings.is_auto_detect_enabled()
+    }
+
+    /// Set auto-detection enabled/disabled
+    pub fn set_auto_detect(&mut self, enabled: bool) {
+        self.settings.set_auto_detect(enabled);
+        info!("Auto-detection {}", if enabled { "enabled" } else { "disabled" });
+    }
+
+    /// Get batch size for bulk operations
+    pub fn get_batch_size(&self) -> usize {
+        self.settings.get_batch_size()
+    }
+
+    /// Set batch size for bulk operations
+    pub fn set_batch_size(&mut self, size: usize) -> Result<()> {
+        self.settings.set_batch_size(size)
+            .map_err(|e| anyhow!("Failed to set batch size: {}", e))?;
+        info!("Batch size updated to: {}", size);
+        Ok(())
+    }
+
+    /// Get a reference to the encoding engine
+    pub fn encoding_engine(&self) -> &EncodingEngine {
+        &self.encoding_engine
+    }
+
+    /// Get a mutable reference to the encoding engine
+    pub fn encoding_engine_mut(&mut self) -> &mut EncodingEngine {
+        &mut self.encoding_engine
     }
 }
 
