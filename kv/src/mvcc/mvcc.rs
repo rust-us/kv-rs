@@ -150,11 +150,11 @@ pub enum Key<'a> {
 
 impl<'a> Key<'a> {
     pub fn decode(bytes: &'a [u8]) -> CResult<Self> {
-        todo!()
+        bincode::deserialize(bytes).map_err(|e| crate::error::Error::Internal(e.to_string()))
     }
 
     pub fn encode(&self) -> CResult<Vec<u8>> {
-        todo!()
+        bincode::serialize(self).map_err(|e| crate::error::Error::Internal(e.to_string()))
     }
 }
 
