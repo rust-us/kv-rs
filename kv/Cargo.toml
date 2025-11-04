@@ -32,6 +32,9 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 fs_extra = { workspace = true }
 whosly = { workspace = true }
+# encoding dependencies
+base64 = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }

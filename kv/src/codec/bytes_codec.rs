@@ -65,7 +65,7 @@ impl BytesCodec {
     }
 
     pub fn decode_cursor<R>(&self, cursor: &mut Cursor<&[u8]>) -> CResult<Option<R>> where R: for<'a> Deserialize<'a> {
-        if cursor.is_empty() {
+        if cursor.position() >= cursor.get_ref().len() as u64 {
             return Ok(None);
         }
 
@@ -131,7 +131,7 @@ mod test {
         // decode
         let mut cursor = Cursor::new(get_bytes);
         loop {
-            if cursor.is_empty() {
+            if cursor.position() >= cursor.get_ref().len() as u64 {
                 break;
             }
 
@@ -193,6 +193,6 @@ mod test {
 
             i_for_test += 1;
         }
-        assert!(cursor.is_empty());
+        assert!(cursor.position() >= cursor.get_ref().len() as u64);
     }
 }

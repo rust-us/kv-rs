@@ -40,6 +40,9 @@ fern= { workspace = true }
 sqlformat = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+# encoding dependencies
+base64 = { workspace = true }
+hex = { workspace = true }
 ctrlc = "3.4.2"
 console = "0.15.5"
 signal-hook = {version = "0.3.17"}

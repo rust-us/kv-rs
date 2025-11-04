@@ -73,9 +73,11 @@ whosly = "0.1.8"
 sqlformat = "0.2"
 strum = "0.25"
 strum_macros = "0.25"
+# encoding dependencies
+base64 = "0.21"
+hex = "~0.4.3"
 
 # dev
-hex = "~0.4.3"
 paste = "~1.0.14"
 pretty_assertions = "~1.4.0"
 serial_test = "~2.0.0"

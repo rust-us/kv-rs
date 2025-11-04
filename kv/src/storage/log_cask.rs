@@ -580,7 +580,7 @@ mod tests {
         let mut i_for_test = 0;
         let mut cursor = Cursor::new(persion_list_val.as_slice());
         loop {
-            if cursor.is_empty() {
+            if cursor.position() >= cursor.get_ref().len() as u64 {
                 break;
             }
 
