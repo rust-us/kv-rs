@@ -109,7 +109,7 @@ impl Default for ConfigLoad {
         ConfigLoad {
             version: 1,
             api_key: "".to_string(),
-            data_dir: "data".to_owned(),
+            data_dir: "storage".to_owned(),
             compact_threshold: 0.2,
             prompt: Some(DEFAULT_PROMPT.to_string()),
             show_stats: Some(false),

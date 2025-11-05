@@ -53,3 +53,5 @@ rustyline = "12.0"
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 assert_fs = { workspace = true }
+tempfile = "3.9"
+tokio-test = "0.4"

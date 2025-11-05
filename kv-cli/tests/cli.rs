@@ -1,34 +1,102 @@
-
 #[cfg(test)]
 mod test {
     use assert_cmd::prelude::*;
     use predicates::prelude::*;
     use std::process::Command;
-    use assert_fs::prelude::*;
 
     #[test]
-    fn file_cmd_doesnt_exist() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("kv-cli")?;
+    fn test_help_command() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
 
-        cmd.arg("foobar").arg("test/file/doesnt/exist");
+        cmd.arg("--help");
         cmd.assert()
-            .failure()
-            .stderr(predicate::str::contains("Found argument 'test/file/doesnt/exist' which wasn't expected, or isn't valid in this context"));
+            .success()
+            .stdout(predicate::str::contains("A distributed kv storage CLI"))
+            .stdout(predicate::str::contains("Usage: kvcli"));
 
         Ok(())
     }
 
     #[test]
-    fn file_scmd_path_doesnt_exist() -> Result<(), Box<dyn std::error::Error>> {
-        let file = assert_fs::NamedTempFile::new("sample.txt")?;
-        file.write_str("A test\nActual content\nMore content\nAnother test")?;
+    fn test_version_command() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
 
-        let mut cmd = Command::cargo_bin("kv-cli")?;
-
-        cmd.arg(file.path()).arg("-p test");
+        cmd.arg("--version");
         cmd.assert()
             .success()
-            .stdout(predicate::str::contains("A test\n"));
+            .stdout(predicate::str::contains("kvcli"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_subcommand() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("invalid_command");
+        cmd.assert()
+            .failure()
+            .stderr(predicate::str::contains("unrecognized subcommand"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_debug_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("--debug").arg("--help");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("A distributed kv storage CLI"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_config_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("--config").arg("nonexistent.yaml").arg("--help");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("A distributed kv storage CLI"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_quiet_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("--quiet").arg("--help");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("A distributed kv storage CLI"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_interactive_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("--non-interactive").arg("--help");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("A distributed kv storage CLI"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_login_subcommand_help() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("kvcli")?;
+
+        cmd.arg("help").arg("login");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("login"));
 
         Ok(())
     }
