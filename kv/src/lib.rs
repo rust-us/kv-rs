@@ -77,6 +77,12 @@ pub mod row;
 pub mod snapshot;
 pub mod info;
 
+// Re-export key encoding types for public API
+pub use encoding::{
+    EncodingEngine, EncodingFormat, EncodingError, DataCodec,
+    Base64Codec, HexCodec, JsonCodec, FormatDetector, DetectionResult
+};
+
 #[cfg(test)]
 mod test {
     use crate::error::Error;

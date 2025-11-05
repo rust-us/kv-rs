@@ -833,19 +833,57 @@ impl Session {
                         if is_repl {
                             let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
                             
+                            eprintln!("Format detection results for key '{}':", key);
+                            eprintln!("Value preview: {}", if value_str.len() > 50 { 
+                                format!("{}...", &value_str[..50]) 
+                            } else { 
+                                value_str.clone() 
+                            });
+                            eprintln!();
+                            
                             if detected_formats.is_empty() {
-                                eprintln!("No encoding format detected for key: {}", key);
-                                eprintln!("The value may be plain text or an unsupported format.");
+                                eprintln!("❌ No encoding format detected");
+                                eprintln!("   The value appears to be plain text or an unsupported format.");
+                                eprintln!();
+                                eprintln!("💡 Suggestions:");
+                                eprintln!("   • If this is plain text, no decoding is needed");
+                                eprintln!("   • If this should be encoded data, check the format manually");
+                                eprintln!("   • Try encoding the value first: ENCODE {} <format>", key);
                             } else {
-                                eprintln!("Detected encoding formats for key '{}':", key);
+                                eprintln!("✅ Detected {} possible format(s):", detected_formats.len());
                                 for (i, result) in detected_formats.iter().enumerate() {
                                     let confidence_percent = result.confidence * 100.0;
-                                    eprintln!("  {}. {} ({:.1}% confidence)", i + 1, result.format, confidence_percent);
+                                    let confidence_icon = if confidence_percent >= 90.0 { "🟢" } 
+                                                         else if confidence_percent >= 70.0 { "🟡" } 
+                                                         else { "🔴" };
+                                    eprintln!("   {}. {} {} ({:.1}% confidence)", 
+                                             i + 1, confidence_icon, result.format, confidence_percent);
                                 }
                                 
+                                eprintln!();
+                                let best_format = &detected_formats[0];
+                                eprintln!("🎯 Recommendation: Use format '{}'", best_format.format);
+                                
                                 if detected_formats.len() > 1 {
-                                    eprintln!();
-                                    eprintln!("Recommendation: Use format '{}' (highest confidence)", detected_formats[0].format);
+                                    eprintln!("⚠️  Multiple formats detected - use the highest confidence one");
+                                }
+                                
+                                eprintln!();
+                                eprintln!("💡 Next steps:");
+                                eprintln!("   • Decode: DECODE {} {}", key, best_format.format);
+                                eprintln!("   • Auto-decode: DECODE {}", key);
+                                if best_format.confidence < 0.9 {
+                                    eprintln!("   • Manual verification recommended due to low confidence");
+                                }
+                            }
+                            
+                            // Show detection statistics if in debug mode
+                            if self.debug_mode {
+                                eprintln!();
+                                eprintln!("🔍 Debug: Detection statistics");
+                                let stats = self.encoding_engine.get_detection_stats(&value_str);
+                                for (format, score) in stats {
+                                    eprintln!("   {}: {:.3}", format, score);
                                 }
                             }
                             
@@ -860,19 +898,38 @@ impl Session {
                 if is_repl {
                     let show = Show::new_with_start(self.settings.is_show_affected(), is_repl, start);
                     
-                    eprintln!("Supported encoding formats:");
-                    eprintln!("  base64  - Base64 encoding");
-                    eprintln!("  hex     - Hexadecimal encoding");
-                    eprintln!("  json    - JSON string encoding");
-                    eprintln!();
-                    eprintln!("Usage examples:");
-                    eprintln!("  ENCODE mykey base64");
-                    eprintln!("  DECODE mykey hex");
-                    eprintln!("  MENCCODE key1 key2 base64");
-                    eprintln!("  MDECODE key1 key2");
-                    eprintln!("  DETECT mykey");
+                    // Display current configuration
+                    let default_format = self.encoding_engine.default_format();
+                    let auto_detect = self.settings.is_auto_detect_enabled();
+                    let batch_size = self.settings.get_batch_size();
                     
-                    show.output(3);
+                    eprintln!("Current Encoding Configuration:");
+                    eprintln!("  Default format: {}", default_format);
+                    eprintln!("  Auto-detection: {}", if auto_detect { "enabled" } else { "disabled" });
+                    eprintln!("  Batch size: {}", batch_size);
+                    eprintln!();
+                    
+                    eprintln!("Supported encoding formats:");
+                    let supported_formats = self.encoding_engine.supported_formats();
+                    for format in &supported_formats {
+                        let marker = if *format == default_format { " (default)" } else { "" };
+                        match format {
+                            EncodingFormat::Base64 => eprintln!("  base64  - Base64 encoding{}", marker),
+                            EncodingFormat::Hex => eprintln!("  hex     - Hexadecimal encoding{}", marker),
+                            EncodingFormat::Json => eprintln!("  json    - JSON string encoding{}", marker),
+                        }
+                    }
+                    eprintln!();
+                    
+                    eprintln!("Available commands:");
+                    eprintln!("  ENCODE <key> <format>           - Encode value at key using specified format");
+                    eprintln!("  DECODE <key> [format]           - Decode value at key (auto-detect if format omitted)");
+                    eprintln!("  MENCCODE <key1> [key2] ... <format> - Batch encode multiple keys");
+                    eprintln!("  MDECODE <key1> [key2] ...       - Batch decode multiple keys (auto-detect)");
+                    eprintln!("  DETECT <key>                    - Detect encoding format of value at key");
+                    eprintln!("  SHOW ENCODINGS                  - Show this information");
+                    
+                    show.output(supported_formats.len() as i64);
                 }
                 Ok(Some(ServerStats::default()))
             }
