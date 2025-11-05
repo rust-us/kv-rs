@@ -125,6 +125,13 @@ impl Default for ConfigLoad {
 }
 
 impl ConfigLoad {
+    /// Create a new ConfigLoad with custom data directory (for testing)
+    pub fn new_with_data_dir(data_dir: String) -> Self {
+        let mut config = Self::default();
+        config.data_dir = data_dir;
+        config
+    }
+
     pub fn new(file: &str) -> CResult<Self> {
         let df = ConfigLoad::default();
 
