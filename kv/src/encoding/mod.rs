@@ -495,4 +495,147 @@ mod tests {
         let stats = engine.get_detection_stats("aGVsbG8=");
         assert!(stats.contains_key(&EncodingFormat::Base64));
     }
+
+    // Helper function to create a fully configured test engine
+    fn create_test_engine() -> EncodingEngine {
+        let mut engine = EncodingEngine::new(EncodingFormat::Base64);
+        engine.register_codec(EncodingFormat::Base64, Box::new(Base64Codec::new()));
+        engine.register_codec(EncodingFormat::Hex, Box::new(HexCodec::new()));
+        engine.register_codec(EncodingFormat::Json, Box::new(JsonCodec::new()));
+        engine
+    }
+
+    #[test]
+    fn test_comprehensive_encoding_operations() {
+        let engine = create_test_engine();
+        let test_data = b"Hello, World!";
+
+        // Test Base64 encoding
+        let encoded = engine.encode(test_data, EncodingFormat::Base64).unwrap();
+        assert_eq!(encoded, "SGVsbG8sIFdvcmxkIQ==");
+        
+        let decoded = engine.decode(&encoded, EncodingFormat::Base64).unwrap();
+        assert_eq!(decoded, test_data);
+
+        // Test Hex encoding
+        let encoded = engine.encode(test_data, EncodingFormat::Hex).unwrap();
+        assert_eq!(encoded, "48656c6c6f2c20576f726c6421");
+        
+        let decoded = engine.decode(&encoded, EncodingFormat::Hex).unwrap();
+        assert_eq!(decoded, test_data);
+
+        // Test JSON encoding
+        let encoded = engine.encode(test_data, EncodingFormat::Json).unwrap();
+        assert_eq!(encoded, r#""Hello, World!""#);
+        
+        let decoded = engine.decode(&encoded, EncodingFormat::Json).unwrap();
+        assert_eq!(decoded, test_data);
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        let engine = create_test_engine();
+        
+        // Test empty data
+        let empty_data = b"";
+        let encoded = engine.encode(empty_data, EncodingFormat::Base64).unwrap();
+        let decoded = engine.decode(&encoded, EncodingFormat::Base64).unwrap();
+        assert_eq!(decoded, empty_data);
+        
+        // Test large data
+        let large_data = vec![0x42; 1024];
+        let encoded = engine.encode(&large_data, EncodingFormat::Hex).unwrap();
+        let decoded = engine.decode(&encoded, EncodingFormat::Hex).unwrap();
+        assert_eq!(decoded, large_data);
+        
+        // Test binary data
+        let binary_data: Vec<u8> = (0..=255).collect();
+        let encoded = engine.encode(&binary_data, EncodingFormat::Base64).unwrap();
+        let decoded = engine.decode(&encoded, EncodingFormat::Base64).unwrap();
+        assert_eq!(decoded, binary_data);
+    }
+
+    #[test]
+    fn test_error_conditions() {
+        let base64_codec = Base64Codec::new();
+        let hex_codec = HexCodec::new();
+        let json_codec = JsonCodec::new();
+        
+        // Test invalid Base64
+        assert!(base64_codec.decode("invalid!@#").is_err());
+        assert!(base64_codec.decode("abc").is_err()); // Wrong length
+        
+        // Test invalid Hex
+        assert!(hex_codec.decode("invalid").is_err());
+        assert!(hex_codec.decode("68656c6c6g").is_err()); // Invalid character
+        assert!(hex_codec.decode("68656c6c6").is_err()); // Odd length
+        
+        // Test invalid JSON
+        assert!(json_codec.decode("invalid").is_err());
+        assert!(json_codec.decode("123").is_err()); // Not a string
+        assert!(json_codec.decode(r#""unterminated"#).is_err());
+    }
+
+    #[test]
+    fn test_format_detection_comprehensive() {
+        let mut engine = create_test_engine();
+        
+        // Test clear Base64 detection
+        let results = engine.detect("SGVsbG8gd29ybGQ=").unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].format, EncodingFormat::Base64);
+        assert!(results[0].confidence > 0.5);
+        
+        // Test clear Hex detection
+        let results = engine.detect("48656c6c6f20776f726c64").unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].format, EncodingFormat::Hex);
+        assert!(results[0].confidence > 0.5);
+        
+        // Test clear JSON detection
+        let results = engine.detect(r#""hello world""#).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].format, EncodingFormat::Json);
+        assert!(results[0].confidence > 0.5);
+        
+        // Test ambiguous data
+        let results = engine.detect("41414141").unwrap(); // Could be hex "AAAA" or base64
+        assert!(!results.is_empty());
+        // Results should be sorted by confidence
+        for i in 1..results.len() {
+            assert!(results[i-1].confidence >= results[i].confidence);
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_all_formats() {
+        let engine = create_test_engine();
+        
+        let test_cases = vec![
+            b"".as_slice(),
+            b"a",
+            b"Hello, World!",
+            b"The quick brown fox jumps over the lazy dog",
+            &[0, 1, 2, 3, 255, 254, 253],
+        ];
+        
+        for data in test_cases {
+            // Test Base64 roundtrip
+            let encoded = engine.encode(data, EncodingFormat::Base64).unwrap();
+            let decoded = engine.decode(&encoded, EncodingFormat::Base64).unwrap();
+            assert_eq!(decoded, data);
+            
+            // Test Hex roundtrip
+            let encoded = engine.encode(data, EncodingFormat::Hex).unwrap();
+            let decoded = engine.decode(&encoded, EncodingFormat::Hex).unwrap();
+            assert_eq!(decoded, data);
+            
+            // Test JSON roundtrip (for UTF-8 compatible data)
+            if std::str::from_utf8(data).is_ok() {
+                let encoded = engine.encode(data, EncodingFormat::Json).unwrap();
+                let decoded = engine.decode(&encoded, EncodingFormat::Json).unwrap();
+                assert_eq!(decoded, data);
+            }
+        }
+    }
 }
