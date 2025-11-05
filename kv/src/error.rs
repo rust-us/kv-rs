@@ -10,6 +10,7 @@ pub type CResult<T> = std::result::Result<T, Error>;
 pub enum Error {
     Abort,
     Config(String),
+    Encoding(String),
     Internal(String),
     Parse(String),
     ReadOnly,
@@ -22,7 +23,7 @@ impl std::error::Error for Error {}
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         match self {
-            Error::Config(s) | Error::Internal(s) | Error::Parse(s) | Error::Value(s) => {
+            Error::Config(s) | Error::Encoding(s) | Error::Internal(s) | Error::Parse(s) | Error::Value(s) => {
                 write!(f, "{}", s)
             }
             Error::Abort => write!(f, "Operation aborted"),
@@ -101,5 +102,11 @@ impl From<std::string::FromUtf8Error> for Error {
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(err: std::sync::PoisonError<T>) -> Self {
         Error::Internal(err.to_string())
+    }
+}
+
+impl From<crate::encoding::EncodingError> for Error {
+    fn from(err: crate::encoding::EncodingError) -> Self {
+        Error::Encoding(err.to_string())
     }
 }

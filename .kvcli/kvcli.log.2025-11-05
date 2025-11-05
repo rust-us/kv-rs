@@ -1,0 +1,12 @@
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli] kvcli start args: Args { debug: false, help: false, config: "config/kvdb.yaml", cmd: None, quiet: false, log_level: "info", non_interactive: false, query: None }
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli] kvcli start config: ConfigLoad { version: 1, api_key: "abcd", data_dir: "storage", compact_threshold: 0.2, prompt: Some("kvcli"), show_stats: Some(false), auto_append_part_cmd: Some(false), multi_line: Some(true), replace_newline: Some(true), show_affected: Some(false), progress_color: Some(""), show_progress: Some(false), encoding: Some(EncodingConfig { default_format: "base64", auto_detect: true, batch_size: 100 }) }
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli::server::session] Encoding engine initialized with default format: base64
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli::server::session] Auto-detection enabled: true
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli::server::session] Batch size: 100
+[2025-11-05T15:46:00+08:00] - INFO - [kvcli] kvcli starting, Prepare Running packet with is_repl[true].
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli] kvcli start args: Args { debug: false, help: false, config: "config/kvdb.yaml", cmd: None, quiet: false, log_level: "info", non_interactive: false, query: None }
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli] kvcli start config: ConfigLoad { version: 1, api_key: "abcd", data_dir: "storage", compact_threshold: 0.2, prompt: Some("kvcli"), show_stats: Some(false), auto_append_part_cmd: Some(false), multi_line: Some(true), replace_newline: Some(true), show_affected: Some(false), progress_color: Some(""), show_progress: Some(false), encoding: Some(EncodingConfig { default_format: "base64", auto_detect: true, batch_size: 100 }) }
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli::server::session] Encoding engine initialized with default format: base64
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli::server::session] Auto-detection enabled: true
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli::server::session] Batch size: 100
+[2025-11-05T15:46:45+08:00] - INFO - [kvcli] kvcli starting, Prepare Running packet with is_repl[true].

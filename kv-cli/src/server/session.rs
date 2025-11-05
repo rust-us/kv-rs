@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::server::config::{ConfigLoad, DEFAULT_PROMPT};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
-use log::info;
+use log::{info, debug, warn};
 use rustyline::{CompletionType, Editor};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -16,7 +16,7 @@ use kv_rs::info::get_info;
 use kv_rs::row::rows::ServerStats;
 use kv_rs::storage::engine::Engine;
 use kv_rs::storage::log_cask::LogCask;
-use kv_rs::encoding::{EncodingEngine, EncodingFormat, Base64Codec, HexCodec, JsonCodec};
+use kv_rs::encoding::{EncodingEngine, EncodingFormat, EncodingError, Base64Codec, HexCodec, JsonCodec};
 use crate::ast::token_kind::TokenKind;
 use crate::ast::tokenizer::{Token, Tokenizer};
 use crate::rusty::CliHelper;
@@ -29,6 +29,7 @@ pub const SET_RESP_BYE_STR: &str = "Bye~";
 /// Session and kv storage cmd and running
 pub struct Session {
     is_repl: bool,
+    debug_mode: bool,
 
     running: Arc<AtomicBool>,
     engine: LogCask,
@@ -67,7 +68,7 @@ impl Session {
         Ok(encoding_engine)
     }
 
-    pub async fn try_new(settings: ConfigLoad, is_repl: bool, running: Arc<AtomicBool>) -> Result<Self> {
+    pub async fn try_new(settings: ConfigLoad, is_repl: bool, debug_mode: bool, running: Arc<AtomicBool>) -> Result<Self> {
         if is_repl {
             println!("Welcome to {}.", DEFAULT_PROMPT);
             println!("Connecting to Client.");
@@ -83,6 +84,7 @@ impl Session {
 
         Ok(Self {
             is_repl,
+            debug_mode,
             running,
             engine,
             encoding_engine,
@@ -91,6 +93,53 @@ impl Session {
             in_comment_block: false,
             keywords: Arc::new(keywords),
         })
+    }
+
+    /// Format encoding error with user-friendly message and optional debug info
+    fn format_encoding_error(&self, error: &EncodingError, context: &str) -> String {
+        let user_message = match error {
+            EncodingError::UnsupportedFormat(format) => {
+                format!("Unsupported encoding format '{}'. Use: base64, hex, or json", format)
+            }
+            EncodingError::InvalidData(msg) => {
+                format!("Invalid encoded data: {}", msg)
+            }
+            EncodingError::KeyNotFound(key) => {
+                format!("Key '{}' not found", key)
+            }
+            EncodingError::EncodingFailed(msg) => {
+                format!("Failed to encode data: {}", msg)
+            }
+            EncodingError::DecodingFailed(msg) => {
+                format!("Failed to decode data: {}", msg)
+            }
+            EncodingError::DetectionFailed(msg) => {
+                format!("Could not detect encoding format: {}", msg)
+            }
+        };
+
+        if self.debug_mode {
+            format!("{} (Context: {}, Debug: {:?})", user_message, context, error)
+        } else {
+            user_message
+        }
+    }
+
+    /// Handle encoding errors with appropriate logging and user feedback
+    fn handle_encoding_error(&self, error: EncodingError, context: &str) -> anyhow::Error {
+        let formatted_error = self.format_encoding_error(&error, context);
+        
+        // Log the error for debugging
+        match error {
+            EncodingError::UnsupportedFormat(_) | EncodingError::InvalidData(_) => {
+                warn!("Encoding error in {}: {}", context, error);
+            }
+            _ => {
+                debug!("Encoding error in {}: {}", context, error);
+            }
+        }
+
+        anyhow!(formatted_error)
     }
 
     async fn prompt(&self) -> String {
@@ -562,7 +611,7 @@ impl Session {
                         }
                         Ok(Some(ServerStats::default()))
                     }
-                    Err(e) => Err(anyhow!("Encoding failed: {}", e)),
+                    Err(e) => Err(self.handle_encoding_error(e, &format!("ENCODE command for key '{}'", key))),
                 }
             }
             (QueryKind::Decode, _) => {
@@ -601,7 +650,7 @@ impl Session {
                             }
                             detected_formats[0].format
                         }
-                        Err(e) => return Err(anyhow!("Format detection failed: {}", e)),
+                        Err(e) => return Err(self.handle_encoding_error(e, &format!("DECODE auto-detection for key '{}'", key))),
                     }
                 };
                 
@@ -616,7 +665,7 @@ impl Session {
                         }
                         Ok(Some(ServerStats::default()))
                     }
-                    Err(e) => Err(anyhow!("Decoding failed: {}", e)),
+                    Err(e) => Err(self.handle_encoding_error(e, &format!("DECODE command for key '{}'", key))),
                 }
             }
             (QueryKind::MEncode, _) => {
@@ -659,7 +708,8 @@ impl Session {
                                         success_count += 1;
                                     }
                                     Err(e) => {
-                                        eprintln!("  {} -> ERROR: {}", key, e);
+                                        let error_msg = self.format_encoding_error(&e, &format!("MENCCODE for key '{}'", key));
+                                        eprintln!("  {} -> ERROR: {}", key, error_msg);
                                         error_count += 1;
                                     }
                                 }
@@ -722,14 +772,16 @@ impl Session {
                                                             success_count += 1;
                                                         }
                                                         Err(e) => {
-                                                            eprintln!("  {} -> ERROR: Decoding failed: {}", key, e);
+                                                            let error_msg = self.format_encoding_error(&e, &format!("MDECODE for key '{}'", key));
+                                                            eprintln!("  {} -> ERROR: {}", key, error_msg);
                                                             error_count += 1;
                                                         }
                                                     }
                                                 }
                                             }
                                             Err(e) => {
-                                                eprintln!("  {} -> ERROR: Format detection failed: {}", key, e);
+                                                let error_msg = self.format_encoding_error(&e, &format!("MDECODE format detection for key '{}'", key));
+                                                eprintln!("  {} -> ERROR: {}", key, error_msg);
                                                 error_count += 1;
                                             }
                                         }
@@ -801,7 +853,7 @@ impl Session {
                         }
                         Ok(Some(ServerStats::default()))
                     }
-                    Err(e) => Err(anyhow!("Format detection failed: {}", e)),
+                    Err(e) => Err(self.handle_encoding_error(e, &format!("DETECT command for key '{}'", key))),
                 }
             }
             (QueryKind::ShowEncodings, _) => {

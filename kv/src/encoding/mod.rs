@@ -71,11 +71,7 @@ impl fmt::Display for EncodingError {
 
 impl std::error::Error for EncodingError {}
 
-impl From<EncodingError> for Error {
-    fn from(err: EncodingError) -> Self {
-        Error::Internal(err.to_string())
-    }
-}
+
 
 /// Trait for data encoding/decoding implementations
 pub trait DataCodec: Send + Sync {

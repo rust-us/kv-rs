@@ -116,7 +116,7 @@ pub async fn main() -> Result<()> {
         cfg.terminal_update();
     }
 
-    let mut session = session::Session::try_new(cfg, true, running.clone()).await?;
+    let mut session = session::Session::try_new(cfg, true, args.debug, running.clone()).await?;
 
     info!("kvcli starting, Prepare Running packet with is_repl[{}].", is_repl);
 
